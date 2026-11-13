@@ -180,6 +180,15 @@ describe("上海每周、跨午夜和特殊日期", () => {
     c.breaks[1].startTime = "00:20";
     expect(() => validateSchoolConfig(c)).not.toThrow();
   });
+  it("临时停用和特殊日期不能掩盖每周作息本身的重叠", () => {
+    const c = config();
+    c.breaks.push({ ...c.breaks[0], id: "overlap", startTime: "09:50", endTime: "10:10" });
+    c.disabledDates = Array.from(
+      { length: 10 },
+      (_, i) => `2026-01-${String(i + 3).padStart(2, "0")}`,
+    );
+    expect(() => validateSchoolConfig(c)).toThrow("重叠");
+  });
   it("拒绝非法时间、重复 ID、无效日期和未受信 JSON", () => {
     const c = config();
     c.breaks[0].startTime = "24:00";

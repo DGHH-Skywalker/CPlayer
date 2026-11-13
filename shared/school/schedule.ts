@@ -126,11 +126,15 @@ export const validateSchoolConfig = (config: SchoolConfig): SchoolConfig => {
     if (typeof config.bilibili[key] !== "boolean") throw new Error("浏览器开关无效");
   }
   // 取完整周及特殊日期前后一天，检测周日到周一和例外覆盖后的冲突
-  const starts = new Set(["2026-01-04", ...Object.keys(config.specialDates)]);
-  for (const date of starts) {
+  const starts = [
+    { date: "2026-01-04", weeklyOnly: true },
+    ...Object.keys(config.specialDates).map((date) => ({ date, weeklyOnly: false })),
+  ];
+  for (const { date, weeklyOnly } of starts) {
+    const effective = weeklyOnly ? { ...config, disabledDates: [], specialDates: {} } : config;
     const origin = dateStart(date);
     const windows = Array.from({ length: 10 }, (_, i) => schoolDate(origin + (i - 1) * DAY))
-      .flatMap((d) => intervalsOn(config, d))
+      .flatMap((d) => intervalsOn(effective, d))
       .sort((a, b) => a.start - b.start);
     for (let i = 1; i < windows.length; i++) {
       if (windows[i].start < windows[i - 1].end)
