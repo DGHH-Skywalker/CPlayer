@@ -20,6 +20,7 @@ const sendState = (state: SchoolState): void => {
   if (window && !window.isDestroyed()) window.webContents.send("school:state", state);
 };
 
+/** 注册 B 站等附属媒体的上课停止钩子。 */
 export const registerSchoolClassMediaHook = (hook: () => void | Promise<void>): void => {
   classMediaHook = hook;
 };
