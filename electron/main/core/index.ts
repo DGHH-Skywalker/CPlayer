@@ -1,176 +1,86 @@
-import { app, BrowserWindow } from "electron";
+import { app, protocol } from "electron";
+import { is } from "@electron-toolkit/utils";
 import { electronApp, optimizer } from "@electron-toolkit/utils";
-import {
-  createMainWindow,
-  restoreLyricWindows,
-  getMainWindow,
-  focusMainWindow,
-  getDesktopLyricWindow,
-  getDynamicIslandWindow,
-  getTaskbarLyricWindow,
-} from "@main/window";
-import { isMac } from "@main/utils/config";
-import { registerIpcHandlers } from "@main/ipc";
-import { init as initMedia } from "@main/services/media";
-import { init as initLastfm } from "@main/services/lastfm";
-import { initGlobalHotkey } from "@main/services/globalHotkey";
-import { initDatabase } from "@main/database";
-import { init as initSongCache } from "@main/services/songCache";
-import { init as initDownload } from "@main/services/downloadManager";
-import { pluginRegistry } from "@main/plugins/registry";
-import { init as initPlaybackBridge } from "@main/plugins/playbackBridge";
-import {
-  registerCacheScheme,
-  handleCacheProtocol,
-  handleCacheProtocolOnPartition,
-  MAIN_PARTITION,
-} from "@main/utils/protocol";
-import { startServer } from "@main/server";
-import { startMcpServer } from "@main/services/mcp/http";
-import { initUpdater } from "@main/services/updater";
-import { coreLog, initLogger } from "@main/utils/logger";
-import { initNetworkProxy } from "@main/utils/proxy";
-import { isAppQuitting } from "@main/utils/lifecycle";
-import { initAppLifecycle } from "./lifecycle";
-import {
-  initOrpheusRegistration,
-  extractOrpheusUrl,
-  captureOrpheusUrl,
-} from "@main/services/orpheus";
-import { extractAudioFiles, captureAudioFiles } from "@main/services/externalFile";
+import { initUpdater } from "../updater";
+import { initShortcut } from "../shortcut";
+import { useLogger } from "../utils/logger";
+import { initIpc } from "../ipc";
+import { createWindow } from "./window";
+import { initTray } from "../tray";
+import { initSetting } from "./setting";
+import { protocolScheme } from "@shared/meta";
+import { registerAppHandlers } from "./app";
+import { initAppConfig } from "./config";
+import { pluginRegistry } from "../plugins/registry";
+import { initMediaServices } from "../mediaServices";
+import { taskbarLyricService } from "../services/taskbarLyric";
+import { pluginIpcBridge } from "../services/pluginIpcBridge";
+import { initSchoolService } from "../services/schoolService";
 
-/**
- * 配置 Chromium 启动参数以优化内存占用
- */
-const configureMemoryOptimizations = (): void => {
-  // 禁止预热备用渲染进程
-  app.commandLine.appendSwitch("disable-features", "SpareRendererForSitePerProcess");
+const log = useLogger("Main");
+
+// 注册自定义协议
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: protocolScheme,
+    privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true },
+  },
+]);
+
+const init = async (): Promise<void> => {
+  await app.whenReady();
+
+  // 初始化设置与插件
+  await initSetting();
+  void pluginRegistry.checkAllUpdates();
+
+  // 注册自定义协议
+  protocolScheme.forEach((scheme) => {
+    protocol.registerFileProtocol(scheme, (request, callback) => {
+      const url = request.url.substring(scheme.length + 3);
+      callback({ path: url });
+    });
+  });
+
+  // 初始化应用配置
+  initAppConfig();
+  electronApp.setAppUserModelId("top.imsyy.splayer-next");
+  registerAppHandlers();
+
+  // 创建并初始化窗口
+  await initSchoolService();
+  await createWindow();
+  await initIpc();
+
+  // 初始化插件 IPC 桥接（连接插件管理器与 WebContents 路由）
+  pluginIpcBridge.init();
+  // 初始化快捷键
+  initShortcut();
+  // 初始化系统托盘
+  initTray();
+  // 初始化更新程序
+  initUpdater();
+  // 初始化媒体服务
+  await initMediaServices();
+  // 初始化桌面歌词服务（在 IPC 注册后）
+  await taskbarLyricService.init();
+
+  app.on("browser-window-created", (_, window) => {
+    optimizer.watchWindowShortcuts(window);
+  });
+
+  app.on("activate", () => {
+    void createWindow();
+  });
+
+  log.info("🚀 Main process initialized");
 };
 
-/** 内存指标采样间隔 */
-const MEMORY_LOG_INTERVAL_MS = 10 * 60 * 1000;
-/** 启动后首次采样延迟，避开启动期波动 */
-const MEMORY_LOG_FIRST_DELAY_MS = 60 * 1000;
+if (is.dev) {
+  app.commandLine.appendSwitch("disable-features", "AutofillServerCommunication");
+}
 
-/** 记录各进程内存工作集，用于量化内存表现与防劣化对比 */
-const logProcessMemory = (): void => {
-  // pid → 窗口名，让 Tab 进程能区分主窗口与各歌词窗口
-  const windowPids = new Map<number, string>();
-  const namedWindows: Array<[string, Electron.BrowserWindow | null]> = [
-    ["main", getMainWindow()],
-    ["desktop-lyric", getDesktopLyricWindow()],
-    ["dynamic-island", getDynamicIslandWindow()],
-    ["taskbar-lyric", getTaskbarLyricWindow()],
-  ];
-  for (const [name, win] of namedWindows) {
-    if (win && !win.isDestroyed()) windowPids.set(win.webContents.getOSProcessId(), name);
-  }
-  const parts = app.getAppMetrics().map((metric) => {
-    const mb = Math.round(metric.memory.workingSetSize / 1024);
-    const detail = windowPids.get(metric.pid) ?? metric.name ?? metric.serviceName;
-    const label = detail ? `${metric.type}(${detail})` : metric.type;
-    return `${label} ${mb}MB`;
-  });
-  coreLog.info(`内存占用: ${parts.join(" | ")}`);
-};
-
-/**
- * 初始化应用
- */
-export const initApp = (): void => {
-  configureMemoryOptimizations();
-  // 初始化日志
-  initLogger();
-  // 单例锁
-  const gotLock = app.requestSingleInstanceLock();
-  if (!gotLock) {
-    app.quit();
-    return;
-  }
-  app.on("second-instance", (_event, commandLine) => {
-    focusMainWindow();
-    const url = extractOrpheusUrl(commandLine);
-    if (url) captureOrpheusUrl(url);
-    const files = extractAudioFiles(commandLine);
-    if (files.length > 0) captureAudioFiles(files);
-  });
-  // macOS 通过 open-url 接收协议唤起
-  app.on("open-url", (event, url) => {
-    event.preventDefault();
-    captureOrpheusUrl(url);
-  });
-  // macOS 通过 open-file 接收外部文件打开
-  app.on("open-file", (event, path) => {
-    event.preventDefault();
-    captureAudioFiles([path]);
-  });
-  // 应用代理设置
-  initNetworkProxy();
-  // 注册缓存协议方案
-  registerCacheScheme();
-  // 其他初始化
-  app.whenReady().then(() => {
-    electronApp.setAppUserModelId("top.imsyy.splayer-next");
-    // 注册 cache:// 协议处理
-    handleCacheProtocol();
-    handleCacheProtocolOnPartition(MAIN_PARTITION);
-    app.on("browser-window-created", (_, window) => {
-      optimizer.watchWindowShortcuts(window);
-    });
-    // 注册 IPC
-    let startupComplete = false;
-    registerIpcHandlers(() => {
-      if (startupComplete) return;
-      startupComplete = true;
-      setImmediate(() => {
-        if (isAppQuitting()) return;
-        void startServer();
-        void startMcpServer();
-        void pluginRegistry.checkAllUpdates();
-      });
-    });
-    // 初始化数据库
-    initDatabase();
-    // 创建主窗口
-    const mainWindow = createMainWindow();
-    // 播放配置同步前准备系统媒体控件，对外服务等待启动层退出。
-    mainWindow.once("show", () => {
-      initMedia();
-    });
-    // 注册 orpheus 协议并处理冷启动唤起
-    initOrpheusRegistration();
-    const coldOrpheusUrl = extractOrpheusUrl(process.argv);
-    if (coldOrpheusUrl) captureOrpheusUrl(coldOrpheusUrl);
-    const coldAudioFiles = extractAudioFiles(process.argv);
-    if (coldAudioFiles.length > 0) captureAudioFiles(coldAudioFiles);
-    // 启动歌曲缓存
-    void initSongCache();
-    // 启动下载服务
-    void initDownload();
-    // 初始化 Last.fm 集成
-    void initLastfm();
-    // 初始化插件系统
-    pluginRegistry.init();
-    // 初始化播放事件桥
-    initPlaybackBridge();
-    // 恢复歌词相关窗口
-    restoreLyricWindows();
-    // 注册全局快捷键
-    initGlobalHotkey();
-    initUpdater();
-    // 周期记录各进程内存
-    setTimeout(logProcessMemory, MEMORY_LOG_FIRST_DELAY_MS);
-    setInterval(logProcessMemory, MEMORY_LOG_INTERVAL_MS);
-    app.on("activate", () => {
-      if (isAppQuitting()) return;
-      if (isMac) {
-        if (getMainWindow()) focusMainWindow();
-        else createMainWindow();
-        return;
-      }
-      if (BrowserWindow.getAllWindows().length === 0) createMainWindow();
-    });
-    coreLog.info("应用初始化完成");
-  });
-  initAppLifecycle();
-};
+init().catch((error) => {
+  log.error("Failed to initialize:", error);
+  app.quit();
+});

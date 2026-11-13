@@ -1,942 +1,408 @@
-import os from "os";
-import type { PlaybackQueueSnapshot } from "@shared/types/music";
-import { contextBridge, ipcRenderer, webUtils } from "electron";
+import { contextBridge, ipcRenderer } from "electron";
 import { electronAPI } from "@electron-toolkit/preload";
-import type { ExternalApiStatus, McpStatus, TaskbarLyricSettings } from "@shared/types/settings";
-import type {
-  PluginInfo,
-  PluginGrant,
-  PluginResolveUrlArgs,
-  PluginSearchArgs,
-  PluginInvokeMenuArgs,
-  PluginMatchLyricArgs,
-  PluginMatchCoverArgs,
-} from "@shared/types/plugin";
-import type { HotkeyActionId, HotkeyBinding, HotkeyConflict } from "@shared/types/hotkey";
-import type {
-  LoadOptions,
-  Track,
-  TrackSource,
-  TransitionPreference,
-  PreparedTrackResult,
-} from "@shared/types/player";
-import type {
-  StreamingServerInput,
-  StreamingFavoriteChange,
-  StreamingSyncState,
-} from "@shared/types/streaming";
-import type { RecognitionConfig, RecognitionEvent } from "@shared/types/recognition";
-import type { PlayEventInput, FavoriteEventInput } from "@shared/types/stats";
-import type { TagEditRequest } from "@shared/types/tagEditor";
-import type { UpdateEvent } from "@shared/types/update";
-import type { CloudUploadProgress } from "@shared/types/cloudUpload";
-import type { MusicCommentQuery } from "@shared/types/comment";
-import type { AiModelSaveInput } from "@shared/types/ai";
-import type { DesktopLyricUnlockButtonBounds, TaskbarLyricLayoutEvent } from "@shared/types/window";
-import type {
-  LegacyPlaylistRecord,
-  PlaylistCreateInput,
-  PlaylistUpdateInput,
-} from "@shared/types/playlist";
-import type { CjkTransformMode } from "@shared/types/opencc";
-import type { DownloadTrackIdentity } from "@shared/types/download";
-import type {
-  AutoMixComponentStatus,
-  AutoMixComponentId,
-  AutoMixPrepareOptions,
-  TransitionMode,
-} from "@shared/types/automix";
+import type { ConfigApi, PluginKeybindings, SystemConfig } from "@shared/types/settings";
+import type { PluginManifest, PluginState } from "@shared/types/plugin";
+import type { LibraryScanPreview } from "@shared/types/library";
+import type { OrpheusCommandPayload } from "@shared/utils/orpheus";
+import type { AppSettings } from "@shared/types/appSettings";
+import { schoolApi } from "./school";
 
-/** 订阅主进程推送的事件 */
+/** 通用事件订阅。 */
 const subscribe = <T>(channel: string, callback: (data: T) => void): (() => void) => {
   const handler = (_event: Electron.IpcRendererEvent, data: T): void => callback(data);
   ipcRenderer.on(channel, handler);
   return () => ipcRenderer.removeListener(channel, handler);
 };
 
-/**
- * 推断安装类型
- * @returns nsis | portable | appx | dmg | appimage
- */
-const getInstallType = (): "nsis" | "portable" | "appx" | "dmg" | "appimage" => {
-  if (process.env.PORTABLE_EXECUTABLE_DIR) return "portable";
-  if (process.execPath.includes("WindowsApps")) return "appx";
-  if (process.platform === "darwin") return "dmg";
-  if (process.platform === "linux") return "appimage";
-  return "nsis";
+const config: ConfigApi = {
+  get: (keyPath) => ipcRenderer.invoke("config:get", keyPath),
+  set: (keyPath, value) => ipcRenderer.invoke("config:set", keyPath, value),
+  getAll: () => ipcRenderer.invoke("config:getAll"),
+  reset: () => ipcRenderer.invoke("config:reset"),
+  replaceAll: (config) => ipcRenderer.invoke("config:replaceAll", config),
+  export: (options) => ipcRenderer.invoke("config:export", options),
+  exportToFile: (options) => ipcRenderer.invoke("config:exportToFile", options),
+  import: (options) => ipcRenderer.invoke("config:import", options),
+  importFromFile: (options) => ipcRenderer.invoke("config:importFromFile", options),
 };
 
-// 暴露给渲染进程的自定义 API
 const api = {
-  automix: {
-    /**
-     * 查询分析组件状态，不触发下载
-     * @returns 组件安装状态
-     */
-    getStatus: (): Promise<AutoMixComponentStatus> => ipcRenderer.invoke("automix:getStatus"),
-    /**
-     * 手动下载选中的模型或独立运行时
-     * @param id - 组件标识
-     * @returns 更新后的组件状态
-     */
-    download: (id: AutoMixComponentId): Promise<AutoMixComponentStatus> =>
-      ipcRenderer.invoke("automix:download", id),
-    /** 取消本次下载 */
-    cancelDownload: (): Promise<void> => ipcRenderer.invoke("automix:cancelDownload"),
-    /**
-     * 订阅组件状态并清理 HMR 遗留监听器
-     * @param callback - 安装和下载状态回调
-     * @returns 解绑函数
-     */
-    onStatus: (callback: (status: AutoMixComponentStatus) => void): (() => void) => {
-      ipcRenderer.removeAllListeners("automix:componentStatus");
-      return subscribe("automix:componentStatus", callback);
-    },
+  // 应用控制
+  app: {
+    quit: () => ipcRenderer.send("app:quit"),
+    relaunch: () => ipcRenderer.send("app:relaunch"),
   },
-  config: {
-    get: (keyPath: string) => ipcRenderer.invoke("config:get", keyPath),
-    set: (keyPath: string, value: unknown) => ipcRenderer.invoke("config:set", keyPath, value),
-    getAll: () => ipcRenderer.invoke("config:getAll"),
-    reset: () => ipcRenderer.invoke("config:reset"),
-    replaceAll: (config: unknown) => ipcRenderer.invoke("config:replaceAll", config),
-    exportToFile: (
-      payload: unknown,
-    ): Promise<{ ok: boolean; reason?: "canceled" | "writeFailed" }> =>
-      ipcRenderer.invoke("config:exportToFile", payload),
-    importFromFile: (): Promise<
-      { ok: true; data: unknown } | { ok: false; reason: "canceled" | "readFailed" | "parseFailed" }
-    > => ipcRenderer.invoke("config:importFromFile"),
-  },
-  player: {
-    /**
-     * 请求主进程准备下一曲的原生槽位
-     * @param id - 预载任务标识
-     * @param source - 本地音频文件或缓存文件路径
-     * @param startMs - 预载起点，单位为毫秒
-     * @param preference - 交接偏好，省略时只预载音频
-     * @param options - 自动混音模式和有效播放范围
-     * @returns PCM 槽位和自动混音计划各自的就绪状态
-     */
-    prepareNext: (
-      id: string,
-      source: string,
-      startMs?: number,
-      preference?: TransitionPreference,
-      options?: AutoMixPrepareOptions,
-    ): Promise<PreparedTrackResult> =>
-      ipcRenderer.invoke("player:prepareNext", id, source, startMs, preference, options),
-    /**
-     * 请求主进程取消预载并释放对应的缓存租约
-     * @param id - 要取消的预载任务标识
-     */
-    cancelPrepared: (id: string): Promise<void> => ipcRenderer.invoke("player:cancelPrepared", id),
-    /**
-     * 在现有输出流中消费备用槽位并等待交接完成
-     * @param id - 预载槽位标识
-     * @param source - 下一曲缓存音源路径
-     * @param remainingMs - 当前曲目剩余的墙钟时间
-     * @param preference - 曲尾交接时机与淡化时长偏好
-     * @param options - 下一曲的权威元数据和播放上下文
-     * @param mode - 过渡模式，省略时使用交叉过渡
-     * @returns 交接成功时返回下一曲信息
-     */
-    transitionPrepared: (
-      id: string,
-      source: string,
-      remainingMs: number,
-      preference: TransitionPreference,
-      options: LoadOptions,
-      mode?: TransitionMode,
-    ) =>
-      ipcRenderer.invoke(
-        "player:transitionPrepared",
-        id,
-        source,
-        remainingMs,
-        preference,
-        options,
-        mode,
-      ),
-    // 加载音频（本地路径或网络地址）
-    load: (source: string, options?: LoadOptions) =>
-      ipcRenderer.invoke("player:load", source, options ?? {}),
-    // 恢复播放
-    play: () => ipcRenderer.invoke("player:play"),
-    // 暂停播放
-    pause: () => ipcRenderer.invoke("player:pause"),
-    // 停止播放
-    stop: () => ipcRenderer.invoke("player:stop"),
-    /**
-     * 单曲重播需要在原生播放事件前开启新的统计轮次
-     * @param position - 目标位置，单位为毫秒
-     * @param restartRound - 是否开启新的播放统计轮次
-     * @returns 主进程跳转结果
-     */
-    seek: (position: number, restartRound?: boolean) =>
-      ipcRenderer.invoke("player:seek", position, restartRound),
-    // 设置音量（0.0 ~ 1.0）
-    setVolume: (volume: number) => ipcRenderer.invoke("player:setVolume", volume),
-    // 设置输出设备切换时暂停播放
-    setPauseOnDeviceSwitch: (enabled: boolean) =>
-      ipcRenderer.invoke("player:setPauseOnDeviceSwitch", enabled),
-    // 获取当前音量
-    getVolume: () => ipcRenderer.invoke("player:getVolume"),
-    // 设置暂停/恢复时的渐变时长（毫秒），0 表示禁用
-    setFadeDuration: (ms: number) => ipcRenderer.invoke("player:setFadeDuration", ms),
-    // 获取当前渐变时长（毫秒）
-    getFadeDuration: () => ipcRenderer.invoke("player:getFadeDuration"),
-    // 获取播放状态快照
-    getStatus: () => ipcRenderer.invoke("player:getStatus"),
-    // 获取当前真实的音频流与输出参数
-    getStreamInfo: () => ipcRenderer.invoke("player:getStreamInfo"),
-    // 获取 FFT 频谱数据
-    getFftData: () => ipcRenderer.invoke("player:getFftData"),
-    // 启用/禁用 FFT 频谱推送
-    setFftEnabled: (enabled: boolean) => ipcRenderer.invoke("player:setFftEnabled", enabled),
-    // 启用/禁用音量均衡
-    setNormalizationEnabled: (enabled: boolean) =>
-      ipcRenderer.invoke("player:setNormalizationEnabled", enabled),
-    // 启用/禁用 10 频段均衡器
-    setEqualizerEnabled: (enabled: boolean) =>
-      ipcRenderer.invoke("player:setEqualizerEnabled", enabled),
-    // 更新均衡器各频段增益（dB 数组，长度 10）
-    setEqualizerBands: (gainsDb: number[]) =>
-      ipcRenderer.invoke("player:setEqualizerBands", gainsDb),
-    // 设置前级增益（dB）
-    setPreampGain: (preampDb: number) => ipcRenderer.invoke("player:setPreampGain", preampDb),
-    // 设置播放速度（0.5 ~ 2.0），引擎侧自动 clamp
-    setSpeed: (speed: number) => ipcRenderer.invoke("player:setSpeed", speed),
-    // 设置音调偏移（半音 -12 ~ 12），引擎侧自动 clamp
-    setPitch: (semitones: number) => ipcRenderer.invoke("player:setPitch", semitones),
-    // 设置"音调同步"开关（true = 变速保音调）
-    setPitchSync: (sync: boolean) => ipcRenderer.invoke("player:setPitchSync", sync),
-    // 重建音频输出设备
-    reinit: () => ipcRenderer.invoke("player:reinit"),
-    // 获取所有音频输出设备
-    getOutputDevices: () => ipcRenderer.invoke("player:getOutputDevices"),
-    // 获取系统默认输出设备名称
-    getDefaultDeviceName: () => ipcRenderer.invoke("player:getDefaultDeviceName"),
-    // 切换输出设备（传设备 ID，null 使用系统默认）
-    setOutputDevice: (deviceId: string | null, pauseBeforeSwitch = false) =>
-      ipcRenderer.invoke("player:setOutputDevice", deviceId, pauseBeforeSwitch),
-    // 获取当前选择的输出设备 ID
-    getSelectedDeviceName: () => ipcRenderer.invoke("player:getSelectedDeviceName"),
-    // 获取当前歌曲的原始高清封面（base64 data URL）
-    getCoverRaw: () => ipcRenderer.invoke("player:getCoverRaw"),
-    // 按需读取外部歌词文件内容
-    readLyricFile: (filePath: string) => ipcRenderer.invoke("player:readLyricFile", filePath),
-    // 同步播放模式到主进程（供托盘菜单显示）
-    syncPlayMode: (repeatMode: string, shuffleMode: string) =>
-      ipcRenderer.send("player:syncPlayMode", repeatMode, shuffleMode),
-    /**
-     * 同步主窗口当前队列索引
-     * @param index - 当前队列索引，无当前队列项时为 -1
-     */
-    syncQueueIndex: (index: number) => ipcRenderer.send("player:syncQueueIndex", index),
-    // 同步当前歌曲喜欢状态到主进程（供托盘菜单显示）
-    syncLikeState: (liked: boolean) => ipcRenderer.send("player:syncLikeState", liked),
-    // 广播播放控制事件到所有渲染进程
-    dispatch: (type: string) => ipcRenderer.send("player:dispatch", type),
-    /**
-     * 回传主窗口的队列查询结果
-     * @param requestId - 队列查询标识
-     * @param snapshot - 队列分页及当前播放索引
-     */
-    respondQueue: (requestId: string, snapshot: PlaybackQueueSnapshot) =>
-      ipcRenderer.send(`player:queue-response:${requestId}`, snapshot),
-    // 订阅主进程推送的播放事件
-    onEvent: (callback: (event: unknown) => void) => subscribe("player:event", callback),
-  },
-  system: {
-    installType: getInstallType(),
-    platform: process.platform,
-    osInfo: {
-      type: os.type(),
-      arch: os.arch(),
-      release: os.release(),
-    },
-    // 打开开发者工具
-    toggleDevTools: () => ipcRenderer.invoke("system:toggleDevTools"),
-    // 在文件管理器中显示文件
-    showInExplorer: (filePath: string) => ipcRenderer.invoke("system:showInExplorer", filePath),
-    // 将本地或已下载歌曲复制到系统文件剪贴板
-    copyTrackFile: (track: Track): Promise<boolean> =>
-      ipcRenderer.invoke("system:copyTrackFile", track),
-    // 打开日志目录
-    openLogsDir: () => ipcRenderer.invoke("system:openLogsDir"),
-    // 同步语言到主进程
-    setLocale: (locale: string) => ipcRenderer.send("system:setLocale", locale),
-    // 显示并聚焦主窗口
-    focusMainWindow: () => ipcRenderer.invoke("system:focusMainWindow"),
-    // 在主窗口打开设置弹窗
-    openSettings: (category?: string, highlight?: string) =>
-      ipcRenderer.invoke("system:openSettings", category, highlight),
-    // 主窗口监听"打开设置"事件
-    onOpenSettings: (callback: (payload: { category?: string; highlight?: string }) => void) =>
-      subscribe<{ category?: string; highlight?: string }>("system:openSettings", callback),
-    // 获取系统已安装字体
-    listFonts: () => ipcRenderer.invoke("system:listFonts"),
-    // 拉远端字节回渲染层
-    fetchRemoteBytes: (url: string) => ipcRenderer.invoke("system:fetchRemoteBytes", url),
-    // 弹出保存对话框让用户选择位置
-    saveFile: (data: ArrayBuffer, defaultName: string, title: string) =>
-      ipcRenderer.invoke("system:saveFile", data, defaultName, title),
-    // 重启应用
-    relaunch: () => ipcRenderer.invoke("system:relaunch"),
-    // 测试当前网络代理
-    testNetworkProxy: () => ipcRenderer.invoke("system:testNetworkProxy"),
-    // 订阅主进程下发的 orpheus 唤起 URL
-    onProtocolUrl: (callback: (url: string) => void) =>
-      subscribe<string>("protocol:orpheus", callback),
-    // 拉取冷启动暂存的 orpheus 唤起 URL
-    consumePendingProtocolUrl: (): Promise<string | null> =>
-      ipcRenderer.invoke("system:consumePendingProtocolUrl"),
-    // 订阅主进程下发的外部音频文件打开列表
-    onOpenFiles: (callback: (files: string[]) => void) =>
-      subscribe<string[]>("system:open-files", callback),
-    // 拉取冷启动暂存的外部音频文件列表
-    consumePendingAudioFiles: (): Promise<string[]> =>
-      ipcRenderer.invoke("system:consumePendingAudioFiles"),
-    // 获取 File 对象的本地绝对路径（用于拖拽播放）
-    getPathForFile: (file: File): string => webUtils.getPathForFile(file),
-  },
-  library: {
-    // 开始扫描（默认增量）
-    scan: (incremental?: boolean) => ipcRenderer.invoke("library:scan", incremental),
-    // 取消扫描
-    cancelScan: () => ipcRenderer.invoke("library:cancelScan"),
-    // 获取全部曲目
-    getTracks: () => ipcRenderer.invoke("library:getTracks"),
-    // 获取专辑聚合列表
-    getAlbums: () => ipcRenderer.invoke("library:getAlbums"),
-    // 获取歌手聚合列表
-    getArtists: () => ipcRenderer.invoke("library:getArtists"),
-    // 获取某专辑下的全部曲目
-    getAlbumTracks: (albumName: string) => ipcRenderer.invoke("library:getAlbumTracks", albumName),
-    // 获取某歌手的全部曲目
-    getArtistTracks: (artistName: string) =>
-      ipcRenderer.invoke("library:getArtistTracks", artistName),
-    // 按 ID 批量获取曲目
-    getTracksByIds: (ids: string[]) => ipcRenderer.invoke("library:getTracksByIds", ids),
-    // 搜索曲目
-    searchTracks: (query: string) => ipcRenderer.invoke("library:searchTracks", query),
-    // 搜索窗分组搜索（歌曲 / 专辑 / 歌手）
-    quickSearch: (keyword: string) => ipcRenderer.invoke("library:quickSearch", keyword),
-    // 获取曲目总数
-    getTrackCount: () => ipcRenderer.invoke("library:getTrackCount"),
-    // 随机取一首曲目
-    getRandomTrack: () => ipcRenderer.invoke("library:getRandomTrack"),
-    // 随机取多首曲目
-    getRandomTracks: (limit: number) => ipcRenderer.invoke("library:getRandomTracks", limit),
-    // 获取扫描状态
-    isScanning: () => ipcRenderer.invoke("library:isScanning"),
-    // 弹出目录选择器，添加扫描目录
-    addScanDir: () => ipcRenderer.invoke("library:addScanDir"),
-    // 移除扫描目录及其下曲目
-    removeScanDir: (dir: string) => ipcRenderer.invoke("library:removeScanDir", dir),
-    // 获取已配置的扫描目录
-    getScanDirs: () => ipcRenderer.invoke("library:getScanDirs"),
-    // 删除曲目文件并从数据库移除
-    deleteTracks: (paths: string[]) => ipcRenderer.invoke("library:deleteTracks", paths),
-    // 读取本地文件的可编辑标签
-    readTags: (path: string) => ipcRenderer.invoke("library:readTags", path),
-    // 批量写入文件标签
-    writeTags: (edits: TagEditRequest[]) => ipcRenderer.invoke("library:writeTags", edits),
-    // 弹出文件选择器，选择封面图片
-    pickCoverImage: () => ipcRenderer.invoke("library:pickCoverImage"),
-    // 获取歌手头像
-    fetchArtistAvatar: (artistName: string) =>
-      ipcRenderer.invoke("library:fetchArtistAvatar", artistName),
-    // 预取歌手头像
-    prefetchArtistAvatars: (artistNames: string[]) =>
-      ipcRenderer.invoke("library:prefetchArtistAvatars", artistNames),
-    // 订阅扫描进度事件
-    onScanProgress: (callback: (progress: unknown) => void) =>
-      subscribe("library:scanProgress", callback),
-  },
-  playlist: {
-    list: () => ipcRenderer.invoke("playlist:list"),
-    get: (id: string) => ipcRenderer.invoke("playlist:get", id),
-    create: (input: PlaylistCreateInput) => ipcRenderer.invoke("playlist:create", input),
-    update: (id: string, input: PlaylistUpdateInput) =>
-      ipcRenderer.invoke("playlist:update", id, input),
-    remove: (id: string) => ipcRenderer.invoke("playlist:remove", id),
-    addTracks: (id: string, trackIds: string[]) =>
-      ipcRenderer.invoke("playlist:addTracks", id, trackIds),
-    removeTracks: (id: string, trackIds: string[]) =>
-      ipcRenderer.invoke("playlist:removeTracks", id, trackIds),
-    importLegacy: (records: LegacyPlaylistRecord[]) =>
-      ipcRenderer.invoke("playlist:importLegacy", records),
-    clear: () => ipcRenderer.invoke("playlist:clear"),
-  },
+  // 窗口控制
   window: {
-    ready: (): Promise<void> => ipcRenderer.invoke("window:ready"),
-    startupComplete: (): Promise<void> => ipcRenderer.invoke("window:startupComplete"),
-    startupFailed: (error: string): void => ipcRenderer.send("window:startupFailed", error),
-    /**
-     * 同步播放页展开状态
-     * @param expanded - 播放页是否展开
-     */
-    setPlayerExpanded: (expanded: boolean): void =>
-      ipcRenderer.send("window:setPlayerExpanded", expanded),
-    // 切换桌面歌词窗口
-    toggleDesktopLyric: () => ipcRenderer.invoke("window:toggleDesktopLyric"),
-    // 关闭桌面歌词窗口
-    closeDesktopLyric: () => ipcRenderer.invoke("window:closeDesktopLyric"),
-    // 查询桌面歌词窗口是否打开
-    isDesktopLyricOpen: () => ipcRenderer.invoke("window:isDesktopLyricOpen"),
-    // 订阅桌面歌词窗口开关状态
-    onDesktopLyricVisibilityChange: (callback: (open: boolean) => void) =>
-      subscribe<boolean>("desktopLyric:visibilityChange", callback),
-    // 切换灵动岛窗口
-    toggleDynamicIsland: () => ipcRenderer.invoke("window:toggleDynamicIsland"),
-    // 关闭灵动岛窗口
-    closeDynamicIsland: () => ipcRenderer.invoke("window:closeDynamicIsland"),
-    // 查询灵动岛窗口是否打开
-    isDynamicIslandOpen: () => ipcRenderer.invoke("window:isDynamicIslandOpen"),
-    // 订阅灵动岛窗口开关状态
-    onDynamicIslandVisibilityChange: (callback: (open: boolean) => void) =>
-      subscribe<boolean>("dynamicIsland:visibilityChange", callback),
-    // 切换任务栏歌词窗口
-    toggleTaskbarLyric: () => ipcRenderer.invoke("window:toggleTaskbarLyric"),
-    // 关闭任务栏歌词窗口
-    closeTaskbarLyric: () => ipcRenderer.invoke("window:closeTaskbarLyric"),
-    // 查询任务栏歌词窗口是否打开
-    isTaskbarLyricOpen: () => ipcRenderer.invoke("window:isTaskbarLyricOpen"),
-    // 订阅任务栏歌词窗口开关状态
-    onTaskbarLyricVisibilityChange: (callback: (open: boolean) => void) =>
-      subscribe<boolean>("taskbarLyric:visibilityChange", callback),
-    // 主窗口控制
     minimize: () => ipcRenderer.send("window:minimize"),
-    toggleMaximize: () => ipcRenderer.send("window:toggleMaximize"),
-    isMaximized: () => ipcRenderer.invoke("window:isMaximized"),
-    onMaximizeChange: (callback: (maximized: boolean) => void) =>
-      subscribe<boolean>("window:maximizeChange", callback),
-    toggleFullscreen: () => ipcRenderer.send("window:toggleFullscreen"),
-    isFullscreen: () => ipcRenderer.invoke("window:isFullscreen"),
-    onFullscreenChange: (callback: (fullscreen: boolean) => void) =>
-      subscribe<boolean>("window:fullscreenChange", callback),
-    hide: () => ipcRenderer.send("window:hide"),
-    quit: () => ipcRenderer.send("window:quit"),
-  },
-  desktopLyric: {
-    // 订阅桌面歌词配置变化
-    onConfigChange: (callback: (config: unknown) => void) =>
-      subscribe("desktopLyric:configChange", callback),
-    // 将窗口高度锁定到指定像素
-    setHeight: (height: number) => ipcRenderer.invoke("desktopLyric:setHeight", height),
-    // 上报解锁按钮在窗口内容区内的命中区域
-    setUnlockButtonBounds: (bounds: DesktopLyricUnlockButtonBounds) =>
-      ipcRenderer.send("desktopLyric:setUnlockButtonBounds", bounds),
-    // 拖拽移动；只传位置，尺寸由主进程权威 cachedSize 写回
-    move: (x: number, y: number) => ipcRenderer.send("desktopLyric:move", x, y),
-    // 拖拽结束后保存最终位置
-    saveState: () => ipcRenderer.send("desktopLyric:saveState"),
-    // 订阅主进程 screen 光标位置轮询
-    onCursorInside: (callback: (inside: boolean) => void) =>
-      subscribe<boolean>("desktopLyric:cursorInside", callback),
-  },
-  dynamicIsland: {
-    // 订阅灵动岛配置变化
-    onConfigChange: (callback: (config: unknown) => void) =>
-      subscribe("dynamicIsland:configChange", callback),
-    // 拖拽移动；只传位置，尺寸由主进程权威写回
-    move: (x: number, y: number) => ipcRenderer.send("dynamicIsland:move", x, y),
-    // 拖拽结束后保存最终位置；主进程会在落点近顶部时自动吸附回居中
-    saveState: () => ipcRenderer.send("dynamicIsland:saveState"),
-    // 渲染端上报目标宽度，主进程立即 resize
-    resize: (width: number) => ipcRenderer.send("dynamicIsland:resize", width),
-    setShape: (width: number | null) => ipcRenderer.send("dynamicIsland:setShape", width),
-    // 渲染端上报目标高度
-    setHeight: (height: number) => ipcRenderer.send("dynamicIsland:setHeight", height),
-    // 查询当前吸附模式
-    getMode: () => ipcRenderer.invoke("dynamicIsland:getMode"),
-    // 订阅吸附模式变化：snapped（顶部居中）/ floating（自由位置）
-    onModeChange: (callback: (mode: "snapped" | "floating") => void) =>
-      subscribe<"snapped" | "floating">("dynamicIsland:modeChange", callback),
-    // 订阅主进程 screen 光标位置判定（非遮挡模式下用于悬停隐藏）
-    onCursorInside: (callback: (inside: boolean) => void) =>
-      subscribe<boolean>("dynamicIsland:cursorInside", callback),
-  },
-  taskbarLyric: {
-    setContentWidth: (width: number) => ipcRenderer.send("taskbarLyric:setContentWidth", width),
-    // 订阅布局变化（锚定方向、是否居中、系统类型、任务栏主题）
-    onLayout: (callback: (data: TaskbarLyricLayoutEvent) => void) =>
-      subscribe<TaskbarLyricLayoutEvent>("taskbarLyric:layout", callback),
-    // 订阅任务栏歌词配置变化
-    onConfigChange: (callback: (config: TaskbarLyricSettings) => void) =>
-      subscribe<TaskbarLyricSettings>("taskbarLyric:configChange", callback),
-  },
-  plugins: {
-    /**
-     * 保存用户对插件权限的选择
-     * @param id - 插件标识
-     * @param grant - 权限名称
-     * @param enabled - 是否允许
-     * @returns 权限保存结果
-     */
-    setPermission: (id: string, grant: PluginGrant, enabled: boolean) =>
-      ipcRenderer.invoke("plugin:setPermission", id, grant, enabled),
-    /**
-     * 读取插件列表并按需等待指定插件初始化
-     * @param waitForPluginId - 需要等待首次加载的插件标识
-     * @returns 插件状态列表
-     */
-    list: (waitForPluginId) => ipcRenderer.invoke("plugin:list", waitForPluginId),
-    // 从指定路径导入插件
-    install: (filePath: string) => ipcRenderer.invoke("plugin:install", filePath),
-    // 弹出原生文件选择框导入插件
-    pickAndInstall: () => ipcRenderer.invoke("plugin:pickAndInstall"),
-    // 从远端 URL 下载并导入
-    installFromUrl: (url: string) => ipcRenderer.invoke("plugin:installFromUrl", url),
-    // 卸载
-    uninstall: (id: string) => ipcRenderer.invoke("plugin:uninstall", id),
-    // 启用/禁用
-    setEnabled: (id: string, enabled: boolean) =>
-      ipcRenderer.invoke("plugin:setEnabled", id, enabled),
-    // 写入插件配置项
-    setSetting: (id: string, key: string, value: unknown) =>
-      ipcRenderer.invoke("plugin:setSetting", id, key, value),
-    // 手动检查更新
-    checkUpdate: (id: string) => ipcRenderer.invoke("plugin:checkUpdate", id),
-    // 一键更新
-    applyUpdate: (id: string) => ipcRenderer.invoke("plugin:applyUpdate", id),
-    /**
-     * 请求主进程搜索插件独立来源
-     * @param args - 插件、来源、关键词与分页参数
-     * @returns 可播放曲目及分页信息
-     */
-    search: (args: PluginSearchArgs) => ipcRenderer.invoke("plugin:search", args),
-    // 解析播放 URL
-    resolveUrl: (args: PluginResolveUrlArgs) => ipcRenderer.invoke("plugin:resolveUrl", args),
-    // 触发插件自定义菜单项
-    invokeMenu: (args: PluginInvokeMenuArgs) => ipcRenderer.invoke("plugin:invokeMenu", args),
-    // 经插件兜底匹配歌词
-    matchLyric: (args: PluginMatchLyricArgs) => ipcRenderer.invoke("plugin:matchLyric", args),
-    // 经插件兜底匹配封面
-    matchCover: (args: PluginMatchCoverArgs) => ipcRenderer.invoke("plugin:matchCover", args),
-    // 拉取插件市场列表
-    market: () => ipcRenderer.invoke("plugin:market"),
-    // 订阅插件状态变化
-    onStatus: (callback: (info: PluginInfo) => void) =>
-      subscribe<PluginInfo>("plugin:status", callback),
-  },
-  apis: {
-    // 调用任意平台的任意接口
-    call: (platform: string, name: string, params?: Record<string, unknown>) =>
-      ipcRenderer.invoke("apis:call", platform, name, params ?? {}),
-    // 清空指定平台的登录态
-    clearSession: (platform: string) => ipcRenderer.invoke("apis:clearSession", platform),
-    // 打开官方网页登录窗口
-    openLoginWeb: (platform: string) => ipcRenderer.invoke("apis:openLoginWeb", platform),
-    // 手动写入 cookie 登录
-    setCookie: (platform: string, cookie: string) =>
-      ipcRenderer.invoke("apis:setCookie", platform, cookie),
-  },
-  cloud: {
-    // 弹出文件选择器选择待上传歌曲
-    pickSongs: () => ipcRenderer.invoke("cloud:pickSongs"),
-    // 上传单首(path + 队列项 id)
-    uploadSong: (path: string, uploadId: string) =>
-      ipcRenderer.invoke("cloud:uploadSong", path, uploadId),
-    // 订阅上传进度
-    onUploadProgress: (callback: (progress: CloudUploadProgress) => void) =>
-      subscribe<CloudUploadProgress>("cloud:upload-progress", callback),
-  },
-  lyrics: {
-    // 按 id 直取某平台歌词
-    matchById: (platform: string, id: string, track?: unknown, prefetch?: boolean) =>
-      ipcRenderer.invoke("lyrics:matchById", platform, id, track, prefetch),
-    // 按 Track 元数据在某平台模糊搜索歌词
-    matchByQuery: (platform: string, track: unknown) =>
-      ipcRenderer.invoke("lyrics:matchByQuery", platform, track),
-    // 清除验证不通过的模糊匹配映射
-    forgetMatch: (track: unknown, platform: string) =>
-      ipcRenderer.invoke("lyrics:forgetMatch", track, platform),
-    // 记住验证通过的替代候选
-    rememberMatch: (track: unknown, platform: string, id: string) =>
-      ipcRenderer.invoke("lyrics:rememberMatch", track, platform, id),
-    // 按关键词搜索某平台的歌词候选
-    searchCandidates: (platform: string, keyword: string, track: unknown) =>
-      ipcRenderer.invoke("lyrics:searchCandidates", platform, keyword, track),
-    // 按 AMLL 条目 id 取 TTML
-    fetchTTMLById: (id: string) => ipcRenderer.invoke("lyrics:fetchTTMLById", id),
-    // 读取歌曲的手动选择
-    getManualMatch: (track: unknown) => ipcRenderer.invoke("lyrics:getManualMatch", track),
-    // 保存歌曲的手动选择
-    setManualMatch: (track: unknown, match: unknown) =>
-      ipcRenderer.invoke("lyrics:setManualMatch", track, match),
-    // 清除歌曲的手动选择
-    clearManualMatch: (track: unknown) => ipcRenderer.invoke("lyrics:clearManualMatch", track),
-    // 获取 AMLL TTML DB 的 TTML
-    fetchTTMLOverlay: (track: unknown, platform: string) =>
-      ipcRenderer.invoke("lyrics:fetchTTMLOverlay", track, platform),
-    // 按元数据搜索 AMLL TTML DB
-    searchTTML: (track: unknown) => ipcRenderer.invoke("lyrics:searchTTML", track),
-    // 在本地 TTML 歌词库目录中按元信息匹配
-    matchLocalTTML: (track: unknown) => ipcRenderer.invoke("lyrics:matchLocalTTML", track),
-    // 选择本地 TTML 歌词库目录
-    pickLyricRepoDir: () => ipcRenderer.invoke("lyrics:pickLyricRepoDir"),
-  },
-  opencc: {
-    // 转换单个文本
-    convert: (text: string, config: CjkTransformMode): Promise<string> =>
-      ipcRenderer.invoke("opencc:convert", text, config),
-    // 批量转换文本
-    convertBatch: (texts: string[], config: CjkTransformMode): Promise<string[]> =>
-      ipcRenderer.invoke("opencc:convertBatch", texts, config),
-  },
-  comments: {
-    sources: () => ipcRenderer.invoke("comments:sources"),
-    get: (args: MusicCommentQuery) => ipcRenderer.invoke("comments:get", args),
-  },
-  download: {
-    // 入队下载
-    start: (req: unknown) => ipcRenderer.invoke("download:start", req),
-    // 批量入队下载
-    startMany: (reqs: unknown[]) => ipcRenderer.invoke("download:startMany", reqs),
-    // 取消任务
-    cancel: (taskId: string) => ipcRenderer.invoke("download:cancel", taskId),
-    // 重试（复用 taskId 重新入队）
-    retry: (req: unknown) => ipcRenderer.invoke("download:retry", req),
-    // 回传即时解析结果
-    submitResolution: (taskId: string, res: unknown) =>
-      ipcRenderer.invoke("download:resolution", taskId, res),
-    // 上报即时解析失败
-    failResolution: (taskId: string) => ipcRenderer.invoke("download:resolveFailed", taskId),
-    // 删除一条任务记录
-    remove: (taskId: string) => ipcRenderer.invoke("download:remove", taskId),
-    // 清空已结束任务
-    clearFinished: () => ipcRenderer.invoke("download:clearFinished"),
-    // 拉取全部任务
-    list: () => ipcRenderer.invoke("download:list"),
-    lookup: (track: DownloadTrackIdentity): Promise<string | null> =>
-      ipcRenderer.invoke("download:lookup", track),
-    // 选择下载目录
-    pickDir: () => ipcRenderer.invoke("download:pickDir"),
-    // 当前下载目录
-    getDir: () => ipcRenderer.invoke("download:getDir"),
-    // 重置为默认下载目录
-    resetDir: () => ipcRenderer.invoke("download:resetDir"),
-    // 订阅进度
-    onProgress: (callback: (data: unknown) => void) => subscribe("download:progress", callback),
-    // 订阅状态变更
-    onState: (callback: (task: unknown) => void) => subscribe("download:state", callback),
-    // 订阅解析请求
-    onResolve: (callback: (payload: unknown) => void) => {
-      ipcRenderer.removeAllListeners("download:resolve");
-      return subscribe("download:resolve", callback);
+    maximize: () => ipcRenderer.send("window:maximize"),
+    close: () => ipcRenderer.send("window:close"),
+    toggleMaximize: () => ipcRenderer.send("window:toggle-maximize"),
+    fullscreen: () => ipcRenderer.send("window:fullscreen"),
+    leaveFullscreen: () => ipcRenderer.send("window:leave-fullscreen"),
+    isMaximized: () => ipcRenderer.invoke("window:is-maximized"),
+    isFullscreen: () => ipcRenderer.invoke("window:is-fullscreen"),
+    onMaximizedChange: (callback: (isMaximized: boolean) => void) => {
+      ipcRenderer.removeAllListeners("window:maximized-change");
+      return subscribe("window:maximized-change", callback);
+    },
+    onFullscreenChange: (callback: (isFullscreen: boolean) => void) => {
+      ipcRenderer.removeAllListeners("window:fullscreen-change");
+      return subscribe("window:fullscreen-change", callback);
     },
   },
-  nowPlaying: {
-    // 渲染进程同步当前播放状态到主进程
-    update: (payload: unknown) => ipcRenderer.send("nowPlaying:update", payload),
-    // 拉取当前完整快照
-    requestSnapshot: () => ipcRenderer.invoke("nowPlaying:requestSnapshot"),
-    // 写入指定曲目的歌词偏移（ms），0 视为清除
-    setLyricOffset: (trackId: string, offsetMs: number) =>
-      ipcRenderer.send("nowPlaying:setLyricOffset", trackId, offsetMs),
-    // 订阅歌曲切换事件
-    onTrackChange: (callback: (data: unknown) => void) =>
-      subscribe("nowPlaying:track-change", callback),
-    // 订阅歌词内容变化事件
-    onLyricChange: (callback: (snapshot: unknown) => void) =>
-      subscribe("nowPlaying:lyric-change", callback),
-    // 订阅播放位置锚点（跟随 position 事件 5Hz）
-    onPositionSync: (callback: (data: unknown) => void) =>
-      subscribe("nowPlaying:position-sync", callback),
-    // 订阅当前曲目歌词偏移变化
-    onLyricOffsetChange: (callback: (data: unknown) => void) =>
-      subscribe("nowPlaying:lyric-offset-change", callback),
+  config,
+  school: schoolApi,
+  settings: {
+    get: () => ipcRenderer.invoke("settings:get"),
+    update: (settings: Partial<AppSettings>) => ipcRenderer.invoke("settings:update", settings),
+    onChange: (callback: (settings: AppSettings) => void) => {
+      ipcRenderer.removeAllListeners("settings:change");
+      return subscribe("settings:change", callback);
+    },
   },
-  motionCover: {
-    // 解析曲目的动态封面
-    resolve: (track: unknown, source: string): Promise<string | null> =>
-      ipcRenderer.invoke("motionCover:resolve", track, source),
+  // 系统配置事件
+  onConfigChange: (callback: (data: { keyPath: string; value: unknown }) => void) => {
+    ipcRenderer.removeAllListeners("config:change");
+    return subscribe("config:change", callback);
   },
-  theme: {
-    // 弹出文件选择框
-    pickBackgroundImage: (): Promise<string | null> =>
-      ipcRenderer.invoke("theme:pickBackgroundImage"),
-    // 清空已缓存的背景图
-    clearBackgroundImages: (): Promise<void> => ipcRenderer.invoke("theme:clearBackgroundImages"),
+  // 插件
+  plugin: {
+    list: () => ipcRenderer.invoke("plugin:list"),
+    getState: (id: string) => ipcRenderer.invoke("plugin:get-state", id),
+    install: (url: string, autoEnable?: boolean) =>
+      ipcRenderer.invoke("plugin:install", url, autoEnable),
+    remove: (id: string) => ipcRenderer.invoke("plugin:remove", id),
+    enable: (id: string) => ipcRenderer.invoke("plugin:enable", id),
+    disable: (id: string) => ipcRenderer.invoke("plugin:disable", id),
+    reload: (id: string) => ipcRenderer.invoke("plugin:reload", id),
+    loadRenderer: (id: string) => ipcRenderer.invoke("plugin:load-renderer", id),
+    loadStyle: (id: string) => ipcRenderer.invoke("plugin:load-style", id),
+    getAllKeybindings: (): Promise<Record<string, PluginKeybindings>> =>
+      ipcRenderer.invoke("plugin:get-all-keybindings"),
+    checkUpdate: (id: string) => ipcRenderer.invoke("plugin:check-update", id),
+    checkAllUpdates: () => ipcRenderer.invoke("plugin:checkAllUpdates"),
+    update: (id: string) => ipcRenderer.invoke("plugin:update", id),
+    getWebviewPreload: () => ipcRenderer.invoke("plugin:get-webview-preload"),
+    ipcInvoke: (id: string, method: string, ...args: unknown[]) =>
+      ipcRenderer.invoke("plugin:ipc-invoke", id, method, ...args),
+    onChange: (callback: (plugins: PluginState[]) => void) => {
+      ipcRenderer.removeAllListeners("plugin:change");
+      return subscribe("plugin:change", callback);
+    },
+    onInstallSuccess: (callback: (manifest: PluginManifest) => void) => {
+      ipcRenderer.removeAllListeners("plugin:install-success");
+      return subscribe("plugin:install-success", callback);
+    },
+    onUpdatesAvailable: (
+      callback: (updates: Array<{ id: string; currentVersion: string; latestVersion: string }>) => void,
+    ) => {
+      ipcRenderer.removeAllListeners("plugin:updates-available");
+      return subscribe("plugin:updates-available", callback);
+    },
+    // 插件 IPC 桥接（插件间通信，通过 PluginIpcBridge 路由）
+    ipcRegister: (pluginId: string, methods: string[]): Promise<{ ok: boolean }> =>
+      ipcRenderer.invoke("plugin:ipc-register", pluginId, methods),
+    ipcUnregister: (pluginId: string): Promise<{ ok: boolean }> =>
+      ipcRenderer.invoke("plugin:ipc-unregister", pluginId),
+    ipcSendTo: (targetId: string, channel: string, data: unknown): void =>
+      ipcRenderer.send("plugin:ipc-send-to", targetId, channel, data),
+    onIpcFrom: (
+      callback: (payload: { sourceId: string; channel: string; data: unknown }) => void,
+    ): (() => void) => {
+      ipcRenderer.removeAllListeners("plugin:ipc-from");
+      return subscribe("plugin:ipc-from", callback);
+    },
   },
+  // 缓存
   cache: {
-    // 各类别占用统计
-    getStats: () => ipcRenderer.invoke("cache:getStats"),
-    // 清除单个类别
-    clear: (id: string) => ipcRenderer.invoke("cache:clear", id),
-    // 按介质清空
-    clearAllByKind: (kind: "file" | "db") => ipcRenderer.invoke("cache:clearAllByKind", kind),
-    // 获取当前缓存目录
-    getDir: () => ipcRenderer.invoke("cache:getDir"),
-    // 选择新的缓存目录
-    pickDir: () => ipcRenderer.invoke("cache:pickDir"),
-    // 还原默认缓存目录
-    resetDir: () => ipcRenderer.invoke("cache:resetDir"),
-    // 单曲文件缓存运行时
-    song: {
-      // 命中查询：返回本地绝对路径或 null
-      lookup: (cacheKey: string): Promise<string | null> =>
-        ipcRenderer.invoke("cache:song:lookup", cacheKey),
-      /**
-       * 下载歌曲到缓存，预载调用方需要等待下载完成
-       * @param cacheKey - 音源与音质对应的缓存键
-       * @param source - 歌曲来源
-       * @param streamUrl - 下载地址
-       * @param preloadId - 可选的预载消费者标识，用于租约保留和独立取消
-       * @returns 缓存文件路径，失败或取消时返回 null
-       */
-      fetch: (
-        cacheKey: string,
-        source: TrackSource,
-        streamUrl: string,
-        preloadId?: string,
-      ): Promise<string | null> =>
-        ipcRenderer.invoke("cache:song:fetch", cacheKey, source, streamUrl, preloadId),
-      // 取消正在进行的下载
-      cancel: (cacheKey: string): Promise<void> =>
-        ipcRenderer.invoke("cache:song:cancel", cacheKey),
+    get: (key: string) => ipcRenderer.invoke("cache:get", key),
+    set: (key: string, value: unknown, ttl?: number) =>
+      ipcRenderer.invoke("cache:set", key, value, ttl),
+    delete: (key: string) => ipcRenderer.invoke("cache:delete", key),
+    clear: () => ipcRenderer.invoke("cache:clear"),
+    readSong: (id: number, quality?: string, type?: string) =>
+      ipcRenderer.invoke("cache:read-song", id, quality, type),
+    writeSong: (
+      id: number,
+      quality: string,
+      type: string,
+      data: ArrayBuffer,
+      meta?: { duration?: number },
+    ) => ipcRenderer.invoke("cache:write-song", id, quality, type, data, meta),
+    hasSong: (id: number, quality?: string) =>
+      ipcRenderer.invoke("cache:has-song", id, quality),
+    deleteSong: (id: number) => ipcRenderer.invoke("cache:delete-song", id),
+    readStreamSong: (fileId: string) => ipcRenderer.invoke("cache:read-stream-song", fileId),
+    writeStreamSong: (fileId: string, data: ArrayBuffer) =>
+      ipcRenderer.invoke("cache:write-stream-song", fileId, data),
+    hasStreamSong: (fileId: string) => ipcRenderer.invoke("cache:has-stream-song", fileId),
+    deleteStreamSong: (fileId: string) =>
+      ipcRenderer.invoke("cache:delete-stream-song", fileId),
+    writeImage: (data: ArrayBuffer, contentType: string) =>
+      ipcRenderer.invoke("cache:write-image", data, contentType),
+  },
+  // 音频播放（原生 NAPI 引擎）
+  player: {
+    getAudioFingerprint: (path: string, maxDuration?: number) =>
+      ipcRenderer.invoke("player:get-audio-fingerprint", path, maxDuration),
+    analyzeAudioFingerprint: (samples: ArrayBuffer) =>
+      ipcRenderer.invoke("player:analyze-audio-fingerprint", samples),
+    getPlaybackState: () => ipcRenderer.invoke("player:get-playback-state"),
+    load: (
+      source:
+        | string
+        | {
+            samples: ArrayBuffer;
+            channels: number;
+            sampleRate: number;
+            trackId?: number;
+            quality?: string;
+            fileType?: string;
+            duration?: number;
+          },
+      options?: { startSeconds?: number; trackId?: string; streamId?: string },
+    ) => ipcRenderer.invoke("player:load", source, options),
+    play: () => ipcRenderer.invoke("player:play"),
+    pause: () => ipcRenderer.invoke("player:pause"),
+    resume: () => ipcRenderer.invoke("player:resume"),
+    stop: () => ipcRenderer.invoke("player:stop"),
+    seek: (seconds: number) => ipcRenderer.invoke("player:seek", seconds),
+    setVolume: (volume: number) => ipcRenderer.invoke("player:set-volume", volume),
+    setSpeed: (speed: number) => ipcRenderer.invoke("player:set-speed", speed),
+    setEq: (enabled: boolean, gains: number[]) =>
+      ipcRenderer.invoke("player:set-eq", enabled, gains),
+    getAudioDevices: () => ipcRenderer.invoke("player:get-audio-devices"),
+    getCurrentAudioDevice: () => ipcRenderer.invoke("player:get-current-audio-device"),
+    setAudioDevice: (deviceId: string | null) =>
+      ipcRenderer.invoke("player:set-audio-device", deviceId),
+    getLastPlaybackError: () => ipcRenderer.invoke("player:get-last-playback-error"),
+    prepareNext: (options: {
+      trackId?: string;
+      durationMs?: number;
+      source:
+        | string
+        | {
+            samples: ArrayBuffer;
+            channels: number;
+            sampleRate: number;
+            trackId?: number;
+            quality?: string;
+            fileType?: string;
+            duration?: number;
+          };
+      startSeconds?: number;
+      crossfadeDurationMs?: number;
+      eqEnabled?: boolean;
+      eqGains?: number[];
+      transitionRange?: { startSec: number; endSec: number } | null;
+      cueRange?: { startSec: number; endSec: number } | null;
+    }) => ipcRenderer.invoke("player:prepareNext", options),
+    cancelPrepareNext: () => ipcRenderer.invoke("player:cancel-prepare-next"),
+    transitionPrepared: (durationMs: number) =>
+      ipcRenderer.invoke("player:transitionPrepared", durationMs),
+    cancelCrossfade: () => ipcRenderer.invoke("player:cancel-crossfade"),
+    getTransitionState: () => ipcRenderer.invoke("player:get-transition-state"),
+    setTransitionSettings: (config: {
+      equalPower: boolean;
+      autoAdvance: boolean;
+      overlapEnabled?: boolean;
+    }) => ipcRenderer.invoke("player:set-transition-settings", config),
+    updateTransitionSettings: (config: { overlapEnabled?: boolean }) =>
+      ipcRenderer.invoke("player:update-transition-settings", config),
+    setTransitionRanges: (config: {
+      currentStart?: number;
+      currentEnd?: number;
+      nextStart?: number;
+      nextEnd?: number;
+    }) => ipcRenderer.invoke("player:set-transition-ranges", config),
+    getTransitionRanges: () => ipcRenderer.invoke("player:get-transition-ranges"),
+    setCueRange: (range: { startSec: number; endSec: number } | null) =>
+      ipcRenderer.invoke("player:set-cue-range", range),
+    onEvent: (callback: (data: unknown) => void) => {
+      ipcRenderer.removeAllListeners("player:event");
+      return subscribe("player:event", callback);
+    },
+    onMemorySample: (callback: (data: unknown) => void) => {
+      ipcRenderer.removeAllListeners("player:memory-sample");
+      return subscribe("player:memory-sample", callback);
     },
   },
+  // 流媒体播放
   streaming: {
-    /**
-     * 获取服务端收藏状态
-     * @param serverId - 服务器 ID
-     * @param trackId - 服务端歌曲 ID
-     * @returns 收藏状态
-     */
-    getFavorite: (serverId: string, trackId: string) =>
-      ipcRenderer.invoke("streaming:getFavorite", serverId, trackId),
-    /**
-     * 更新服务端收藏状态
-     * @param serverId - 服务器 ID
-     * @param trackId - 服务端歌曲 ID
-     * @param favorite - 目标收藏状态
-     * @returns 服务端确认的状态
-     */
-    setFavorite: (serverId: string, trackId: string, favorite: boolean) =>
-      ipcRenderer.invoke("streaming:setFavorite", serverId, trackId, favorite),
-    /**
-     * 订阅单曲收藏变化
-     * @param callback - 变更回调
-     * @returns 取消订阅函数
-     */
-    onFavoriteChanged: (callback: (change: StreamingFavoriteChange) => void) => {
-      ipcRenderer.removeAllListeners("streaming:favoriteChanged");
-      return subscribe<StreamingFavoriteChange>("streaming:favoriteChanged", callback);
+    probeUrl: (url: string) => ipcRenderer.invoke("streaming:probe-url", url),
+    start: (options: {
+      trackId: number;
+      url: string;
+      startSeconds?: number;
+      volume?: number;
+      speed?: number;
+      autoGain?: number;
+      autoMixPeakOffset?: number;
+      channels?: number;
+      sampleRate?: number;
+      quality?: string;
+      fileType?: string;
+      duration?: number;
+    }) => ipcRenderer.invoke("streaming:start", options),
+    stop: () => ipcRenderer.invoke("streaming:stop"),
+    seek: (seconds: number) => ipcRenderer.invoke("streaming:seek", seconds),
+    setVolume: (volume: number) => ipcRenderer.invoke("streaming:set-volume", volume),
+    setSpeed: (speed: number) => ipcRenderer.invoke("streaming:set-speed", speed),
+    setEq: (enabled: boolean, gains: number[]) =>
+      ipcRenderer.invoke("streaming:set-eq", enabled, gains),
+    onEvent: (callback: (data: unknown) => void) => {
+      ipcRenderer.removeAllListeners("streaming:event");
+      return subscribe("streaming:event", callback);
     },
-    /**
-     * 订阅后台同步状态
-     * @param callback - 状态回调
-     * @returns 取消订阅函数
-     */
-    onSyncState: (callback: (state: StreamingSyncState) => void) => {
-      ipcRenderer.removeAllListeners("streaming:syncState");
-      return subscribe<StreamingSyncState>("streaming:syncState", callback);
-    },
-    /** 读取不包含凭据的服务器视图 */
-    loadServers: () => ipcRenderer.invoke("streaming:loadServers"),
-    /**
-     * 新增服务器
-     * @param input - 服务器表单
-     * @returns 新服务器视图
-     */
-    addServer: (input: StreamingServerInput) => ipcRenderer.invoke("streaming:addServer", input),
-    /**
-     * 更新服务器
-     * @param serverId - 服务器 ID
-     * @param input - 服务器表单
-     * @returns 更新后的服务器视图
-     */
-    updateServer: (serverId: string, input: StreamingServerInput) =>
-      ipcRenderer.invoke("streaming:updateServer", serverId, input),
-    /**
-     * 删除服务器
-     * @param serverId - 服务器 ID
-     * @returns 删除完成
-     */
-    removeServer: (serverId: string) => ipcRenderer.invoke("streaming:removeServer", serverId),
-    /**
-     * 保存激活服务器
-     * @param serverId - 激活服务器 ID
-     * @returns 保存完成
-     */
-    setActiveServer: (serverId: string | null) =>
-      ipcRenderer.invoke("streaming:setActiveServer", serverId),
-    /**
-     * 测试服务器连接
-     * @param input - 服务器表单
-     * @param serverId - 编辑服务器 ID
-     * @returns 连通性结果
-     */
-    testConnection: (input: StreamingServerInput, serverId?: string) =>
-      ipcRenderer.invoke("streaming:testConnection", input, serverId),
-    /**
-     * 连接服务器
-     * @param serverId - 服务器 ID
-     * @returns 连接结果
-     */
-    connect: (serverId: string) => ipcRenderer.invoke("streaming:connect", serverId),
-    /**
-     * 断开服务器会话
-     * @param serverId - 服务器 ID
-     * @returns 断开完成
-     */
-    disconnect: (serverId: string) => ipcRenderer.invoke("streaming:disconnect", serverId),
-    getSnapshot: (serverId: string) => ipcRenderer.invoke("streaming:getSnapshot", serverId),
-    sync: (serverId: string, force?: boolean): Promise<boolean> =>
-      ipcRenderer.invoke("streaming:sync", serverId, force),
-    /**
-     * 订阅媒体库更新
-     * @param callback - 收到更新的服务器 ID
-     * @returns 取消订阅函数
-     */
-    onLibraryUpdated: (callback: (serverId: string) => void) => {
-      ipcRenderer.removeAllListeners("streaming:libraryUpdated");
-      return subscribe<string>("streaming:libraryUpdated", callback);
-    },
-    search: (serverId: string, query: string) =>
-      ipcRenderer.invoke("streaming:search", serverId, query),
-    getAlbumSongs: (serverId: string, albumId: string) =>
-      ipcRenderer.invoke("streaming:getAlbumSongs", serverId, albumId),
-    getPlaylistSongs: (serverId: string, playlistId: string) =>
-      ipcRenderer.invoke("streaming:getPlaylistSongs", serverId, playlistId),
-    getArtistAlbums: (serverId: string, artistId: string) =>
-      ipcRenderer.invoke("streaming:getArtistAlbums", serverId, artistId),
-    getArtistSongs: (serverId: string, artistId: string) =>
-      ipcRenderer.invoke("streaming:getArtistSongs", serverId, artistId),
-    /**
-     * 请求主进程读取歌词
-     * @param serverId - 服务器 ID
-     * @param trackId - 服务端歌曲 ID
-     * @param hint - 旧 Subsonic 歌词端点使用的歌曲信息
-     * @returns 原始歌词文本
-     */
-    getLyrics: (serverId: string, trackId: string, hint?: { artist?: string; title?: string }) =>
-      ipcRenderer.invoke("streaming:getLyrics", serverId, trackId, hint),
-  },
-  recognition: {
-    /** 当前平台是否支持听歌识曲 */
-    isSupported: () => ipcRenderer.invoke("recognition:isSupported"),
-    /**
-     * 启动一次识别
-     * @param config - 采集来源与时长
-     */
-    start: (config: RecognitionConfig) => ipcRenderer.invoke("recognition:start", config),
-    /** 取消当前识别 */
-    cancel: () => ipcRenderer.invoke("recognition:cancel"),
-    /**
-     * 提交渲染进程采集的麦克风 PCM（macOS/Linux 路径）
-     * @param pcm - 8 kHz 单声道样本
-     */
-    submitPcm: (pcm: Float32Array) => ipcRenderer.invoke("recognition:submitPcm", pcm),
-    /**
-     * 订阅识别进度事件
-     * @param callback - 进度 / 结果 / 错误
-     * @returns 取消订阅函数
-     */
-    onEvent: (callback: (event: RecognitionEvent) => void) => {
-      ipcRenderer.removeAllListeners("recognition:event");
-      return subscribe<RecognitionEvent>("recognition:event", callback);
+    onMediaNotification: (callback: (data: unknown) => void) => {
+      ipcRenderer.removeAllListeners("streaming:media-notification");
+      return subscribe("streaming:media-notification", callback);
     },
   },
-  lastfm: {
-    // 发起授权
-    connect: () => ipcRenderer.invoke("lastfm:connect"),
-    // 取消授权轮询
-    cancelConnect: () => ipcRenderer.invoke("lastfm:cancelConnect"),
-    // 断开并清除凭证
-    disconnect: () => ipcRenderer.invoke("lastfm:disconnect"),
-    // 查询连接状态
-    getStatus: () => ipcRenderer.invoke("lastfm:getStatus"),
-    // 同步喜欢
-    love: (artist: string, track: string, loved: boolean) =>
-      ipcRenderer.invoke("lastfm:love", artist, track, loved),
+  // 协议调用
+  onProtocolCommand: (callback: (command: OrpheusCommandPayload) => void) => {
+    ipcRenderer.removeAllListeners("protocol:command");
+    return subscribe("protocol:command", callback);
   },
-  externalApi: {
-    // 重启外部 API 服务
-    restart: () => ipcRenderer.invoke("externalApi:restart"),
-    // 查询当前运行状态
-    getStatus: () => ipcRenderer.invoke("externalApi:getStatus"),
-    // 订阅外部 API 服务状态变化
-    onStatus: (callback: (status: ExternalApiStatus) => void) => {
-      ipcRenderer.removeAllListeners("externalApi:status");
-      return subscribe<ExternalApiStatus>("externalApi:status", callback);
+  // 下载管理
+  download: {
+    start: (song: unknown) => ipcRenderer.invoke("download:start", song),
+    cancel: (songId: number) => ipcRenderer.invoke("download:cancel", songId),
+    retry: (songId: number) => ipcRenderer.invoke("download:retry", songId),
+    delete: (songId: number) => ipcRenderer.invoke("download:delete", songId),
+    getList: () => ipcRenderer.invoke("download:get-list"),
+    clearCompleted: () => ipcRenderer.invoke("download:clear-completed"),
+    setLimit: (limit: number) => ipcRenderer.invoke("download:set-limit", limit),
+    openFolder: () => ipcRenderer.invoke("download:open-folder"),
+    setPath: (path: string) => ipcRenderer.invoke("download:set-path", path),
+    selectPath: () => ipcRenderer.invoke("download:select-path"),
+    onProgress: (callback: (data: unknown) => void) => {
+      ipcRenderer.removeAllListeners("download:progress");
+      return subscribe("download:progress", callback);
+    },
+    onChange: (callback: (data: unknown) => void) => {
+      ipcRenderer.removeAllListeners("download:change");
+      return subscribe("download:change", callback);
     },
   },
-  mcp: {
-    // 重启 MCP 服务
-    restart: () => ipcRenderer.invoke("mcp:restart"),
-    // 查询 MCP 服务状态
-    getStatus: () => ipcRenderer.invoke("mcp:getStatus"),
-    // 获取生成 AI 客户端配置所需的动态参数
-    getClientConfigParams: () => ipcRenderer.invoke("mcp:getClientConfigParams"),
-    // 检测 Agent
-    detectAgents: () => ipcRenderer.invoke("mcp:detectAgents"),
-    // 注入 Agent 配置
-    injectAgentConfig: (agentId: string, params: any) =>
-      ipcRenderer.invoke("mcp:injectAgentConfig", agentId, params),
-    // 订阅 MCP 服务状态变化
-    onStatus: (callback: (status: McpStatus) => void) => {
-      ipcRenderer.removeAllListeners("mcp:status");
-      return subscribe<McpStatus>("mcp:status", callback);
+  // 本地音乐库
+  library: {
+    selectFolders: () => ipcRenderer.invoke("library:select-folders"),
+    previewScan: (folders: string[]): Promise<LibraryScanPreview> =>
+      ipcRenderer.invoke("library:preview-scan", folders),
+    getTree: () => ipcRenderer.invoke("library:get-tree"),
+    getFiles: (directoryPath: string) => ipcRenderer.invoke("library:get-files", directoryPath),
+    openFolder: (folderPath: string) => ipcRenderer.invoke("library:open-folder", folderPath),
+    revealFile: (filePath: string) => ipcRenderer.invoke("library:reveal-file", filePath),
+    importFiles: () => ipcRenderer.invoke("library:import-files"),
+    readFile: (filePath: string) => ipcRenderer.invoke("library:read-file", filePath),
+    analyzeFolder: (folderPath: string) => ipcRenderer.invoke("library:analyze-folder", folderPath),
+    readImage: (filePath: string) => ipcRenderer.invoke("library:read-image", filePath),
+    getMetadata: (filePath: string) => ipcRenderer.invoke("library:get-metadata", filePath),
+    deleteFiles: (filePaths: string[]) => ipcRenderer.invoke("library:delete-files", filePaths),
+    renameFile: (filePath: string, newName: string) =>
+      ipcRenderer.invoke("library:rename-file", filePath, newName),
+    editMetadata: (filePath: string, metadata: unknown, overwrite: boolean) =>
+      ipcRenderer.invoke("library:edit-metadata", filePath, metadata, overwrite),
+    batchEditMetadata: (
+      filePaths: string[],
+      metadata: unknown,
+      options: { overwrite: boolean; skipSameName: boolean },
+    ) => ipcRenderer.invoke("library:batch-edit-metadata", filePaths, metadata, options),
+    readAudioData: (filePath: string) => ipcRenderer.invoke("library:read-audio-data", filePath),
+  },
+  // 歌词
+  lyrics: {
+    openTTMLDb: () => ipcRenderer.invoke("lyrics:open-ttml-db"),
+    getTTMLStats: () => ipcRenderer.invoke("lyrics:get-ttml-stats"),
+    getTTMLQuality: () => ipcRenderer.invoke("lyrics:get-ttml-quality"),
+    setTTMLQuality: (score: number) => ipcRenderer.invoke("lyrics:set-ttml-quality", score),
+    searchTTML: (track: { id?: number; name: string; artists: string; album?: string }) =>
+      ipcRenderer.invoke("lyrics:search-ttml", track),
+    onTTMLDbChange: (callback: (data: unknown) => void) => {
+      ipcRenderer.removeAllListeners("lyrics:ttml-db-change");
+      return subscribe("lyrics:ttml-db-change", callback);
     },
   },
-  aiModel: {
-    list: () => ipcRenderer.invoke("aiModel:list"),
-    save: (input: AiModelSaveInput) => ipcRenderer.invoke("aiModel:save", input),
-    remove: (id: string) => ipcRenderer.invoke("aiModel:remove", id),
-    setActive: (id: string | null) => ipcRenderer.invoke("aiModel:setActive", id),
-  },
-  update: {
-    getState: () => ipcRenderer.invoke("update:getState"),
-    // 检查更新
-    check: (manual: boolean) => ipcRenderer.invoke("update:check", manual),
-    // 下载更新（Win/Linux）
-    download: () => ipcRenderer.invoke("update:download"),
-    // 退出并安装
-    install: () => ipcRenderer.invoke("update:install"),
-    // 打开 Releases 下载页（mac / 兜底）
-    openDownloadPage: () => ipcRenderer.invoke("update:openDownloadPage"),
-    // 订阅更新事件
-    onEvent: (callback: (event: UpdateEvent) => void) => subscribe("update:event", callback),
-  },
+  // 统计
   stats: {
-    // 记录一次播放
-    recordPlay: (event: PlayEventInput) => ipcRenderer.send("stats:recordPlay", event),
-    // 记录一次收藏变更
-    recordFavorite: (event: FavoriteEventInput) => ipcRenderer.send("stats:recordFavorite", event),
-    // 取播放统计汇总
-    getStatsSummary: () => ipcRenderer.invoke("stats:getStatsSummary"),
-    // 取最常播放的曲目
-    getTopTracks: (limit: number) => ipcRenderer.invoke("stats:getTopTracks", limit),
-    // 取最近播放的曲目
-    getRecentTracks: (limit: number) => ipcRenderer.invoke("stats:getRecentTracks", limit),
-    // 取音乐库统计概览
-    getLibraryStats: () => ipcRenderer.invoke("stats:getLibraryStats"),
-    // 取最近 N 天的每日播放统计
-    getPlayHistoryDaily: (days: number) => ipcRenderer.invoke("stats:getPlayHistoryDaily", days),
-    // 取各小时的累计播放统计
-    getPlayHistoryHourly: () => ipcRenderer.invoke("stats:getPlayHistoryHourly"),
-    // 取最常播放的专辑
-    getTopAlbums: (limit: number) => ipcRenderer.invoke("stats:getTopAlbums", limit),
-    // 取最常播放的歌手
-    getTopArtists: (limit: number) => ipcRenderer.invoke("stats:getTopArtists", limit),
+    getOverview: () => ipcRenderer.invoke("stats:get-overview"),
+    getRecent: (limit?: number) => ipcRenderer.invoke("stats:get-recent", limit),
+    getTopSongs: (limit?: number) => ipcRenderer.invoke("stats:get-top-songs", limit),
+    getTopArtists: (limit?: number) => ipcRenderer.invoke("stats:get-top-artists", limit),
+    clear: () => ipcRenderer.invoke("stats:clear"),
+    onChange: (callback: (data: unknown) => void) => {
+      ipcRenderer.removeAllListeners("stats:change");
+      return subscribe("stats:change", callback);
+    },
   },
-  hotkey: {
-    getAll: () => ipcRenderer.invoke("hotkey:getAll"),
-    set: (id: HotkeyActionId, binding: HotkeyBinding) =>
-      ipcRenderer.invoke("hotkey:set", id, binding),
-    reset: (id?: HotkeyActionId) => ipcRenderer.invoke("hotkey:reset", id),
-    setGlobalEnabled: (enabled: boolean) => ipcRenderer.invoke("hotkey:setGlobalEnabled", enabled),
-    probe: (accelerator: string) => ipcRenderer.invoke("hotkey:probe", accelerator),
-    setRecording: (recording: boolean) => ipcRenderer.invoke("hotkey:setRecording", recording),
-    getConflicts: () => ipcRenderer.invoke("hotkey:getConflicts"),
-    onTrigger: (callback: (id: HotkeyActionId) => void) =>
-      subscribe<HotkeyActionId>("hotkey:trigger", callback),
-    onConflicts: (callback: (conflicts: HotkeyConflict[]) => void) =>
-      subscribe<HotkeyConflict[]>("hotkey:conflicts", callback),
+  // 任务栏歌词
+  taskbar: {
+    setMode: (mode: "single" | "double") => ipcRenderer.send("taskbar:set-mode", mode),
+    update: (config: {
+      song?: string;
+      artists?: string;
+      lyrics?: { yrc: unknown[]; lrc: unknown[]; ttml?: unknown[] };
+      currentTime?: number;
+      songId?: number;
+      fontSize?: number;
+      color?: string;
+      playedColor?: string;
+      align?: string;
+      fontFamily?: string;
+      bold?: boolean;
+      offset?: number;
+    }) => ipcRenderer.send("taskbar:update", config),
+    unlock: () => ipcRenderer.send("taskbar:unlock"),
+    lock: () => ipcRenderer.send("taskbar:lock"),
+    toggleVisible: (visible?: boolean) => ipcRenderer.send("taskbar:toggle-visible", visible),
+    onConfigChange: (callback: (config: { x?: number; y?: number }) => void) => {
+      ipcRenderer.removeAllListeners("taskbar:config-change");
+      return subscribe("taskbar:config-change", callback);
+    },
+  },
+  // 系统对话框和外壳
+  shell: {
+    openExternal: (url: string) => ipcRenderer.invoke("shell:open-external", url),
+    showItemInFolder: (path: string) => ipcRenderer.invoke("shell:show-item-in-folder", path),
+    showMessage: (options: {
+      type?: "none" | "info" | "error" | "question" | "warning";
+      title?: string;
+      message: string;
+      detail?: string;
+      buttons?: string[];
+    }) => ipcRenderer.invoke("shell:show-message", options),
+    showConfirm: (options: {
+      title?: string;
+      message: string;
+      detail?: string;
+      confirmText?: string;
+      cancelText?: string;
+    }) => ipcRenderer.invoke("shell:show-confirm", options),
+    showOpenDialog: (options: {
+      title?: string;
+      defaultPath?: string;
+      filters?: { name: string; extensions: string[] }[];
+      properties?: ("openFile" | "openDirectory" | "multiSelections")[];
+    }) => ipcRenderer.invoke("shell:show-open-dialog", options),
+    showSaveDialog: (options: {
+      title?: string;
+      defaultPath?: string;
+      filters?: { name: string; extensions: string[] }[];
+    }) => ipcRenderer.invoke("shell:show-save-dialog", options),
+    selectDirectory: (title?: string) => ipcRenderer.invoke("shell:select-directory", title),
+    checkOnline: (url?: string) => ipcRenderer.invoke("shell:check-online", url),
+  },
+  // 更新
+  updater: {
+    check: () => ipcRenderer.invoke("updater:check"),
+    download: () => ipcRenderer.invoke("updater:download"),
+    install: () => ipcRenderer.invoke("updater:install"),
+    onStatus: (callback: (data: unknown) => void) => {
+      ipcRenderer.removeAllListeners("updater:status");
+      return subscribe("updater:status", callback);
+    },
   },
 };
 
@@ -948,8 +414,8 @@ if (process.contextIsolated) {
     console.error(error);
   }
 } else {
-  // @ts-ignore (define in dts)
+  // @ts-expect-error 非隔离模式回退
   window.electron = electronAPI;
-  // @ts-ignore (define in dts)
+  // @ts-expect-error 非隔离模式回退
   window.api = api;
 }
