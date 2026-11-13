@@ -1,3 +1,4 @@
+import { schoolState } from "./stores/school";
 import "virtual:uno.css";
 import "@/styles/global.css";
 
@@ -55,6 +56,7 @@ const bootstrapPlayback = async (): Promise<void> => {
 /** 挂载首屏并准备播放操作 */
 export const mountApplication = async (): Promise<void> => {
   await router.isReady();
+  if (window.api.school) schoolState.value = await window.api.school.get();
   app.mount("#app");
   await nextTick();
   await initPlayer();

@@ -386,7 +386,7 @@ export const bilibiliCommand = async (command: string, value?: unknown): Promise
       await applyTheater();
       break;
     case "fullscreen":
-      await wc.executeJavaScript(`document.querySelector('video')?.requestFullscreen()`);
+      await wc.executeJavaScript(`document.querySelector('video')?.requestFullscreen()`, true);
       break;
     case "disable-core":
     case "restore-core":

@@ -78,4 +78,34 @@ describe("统一校园 FIFO 点歌", () => {
     expect(requestSongs([track("a")])).toBe(1);
     expect(mock.play).not.toHaveBeenCalled();
   });
+  it("特殊日期的首首自动播放开关覆盖相同 ID 的每周课间", () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-11-13T09:50:00+08:00"));
+      const b = {
+        id: "same",
+        name: "课间",
+        weekdays: [5],
+        startTime: "09:40",
+        endTime: "10:00",
+        enabled: true,
+        autoPlayFirstRequest: true,
+      };
+      schoolState.value = {
+        ...schoolState.value,
+        phase: "BREAK",
+        endAt: Date.now() + 600000,
+        config: {
+          ...schoolState.value.config,
+          scheduleEnabled: true,
+          breaks: [b],
+          specialDates: { "2026-11-13": [{ ...b, autoPlayFirstRequest: false }] },
+        },
+      };
+      expect(requestSongs([track("special")])).toBe(1);
+      expect(mock.play).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

@@ -97,7 +97,7 @@ onBeforeUnmount(() => {
     </div>
     <form class="flex gap-2" @submit.prevent="command('navigate', address)">
       <SInput v-model="address" class="flex-1" aria-label="B 站网址" />
-      <SButton @click="command('navigate', address)">打开</SButton>
+      <SButton>打开</SButton>
     </form>
     <p>{{ state?.title ?? "哔哩哔哩" }} {{ state?.loading ? "· 加载中" : "" }}</p>
     <p v-if="error || state?.error" role="alert">

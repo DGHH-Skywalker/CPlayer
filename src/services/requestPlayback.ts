@@ -1,3 +1,4 @@
+import { resolveSchedule } from "@shared/school/schedule";
 import type { Track, PlaybackContext } from "@shared/types/player";
 import * as player from "@/core/player";
 import * as queue from "@/stores/queue";
@@ -36,11 +37,9 @@ export const requestSongs = (tracks: readonly Track[], context?: PlaybackContext
   const count = fresh.length;
   if (!count) toast.info("歌曲已经在队列中");
   const snapshot = schoolState.value;
-  const active =
-    snapshot.config.breaks.find((b) => snapshot.activeId?.endsWith(`/${b.id}`)) ??
-    Object.values(snapshot.config.specialDates)
-      .flat()
-      .find((b) => snapshot.activeId?.endsWith(`/${b.id}`));
+  const active = snapshot.config.scheduleEnabled
+    ? resolveSchedule(snapshot.config, Date.now()).active
+    : null;
   if (
     count &&
     status.playIndex < 0 &&

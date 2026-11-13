@@ -34,6 +34,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: carbonv-windows-x64
+          cache-on-failure: true
       - name: Use official Electron download
         shell: bash
         run: rm -f .npmrc
@@ -51,6 +52,8 @@ jobs:
         run: pnpm test:electron
       - name: Build native modules and Windows packages
         run: pnpm build:win --x64 --publish never
+      - name: Launch packaged portable app and check class gate
+        run: pnpm exec tsx scripts/test-packaged-windows.ts
       - name: Upload installers, portable app and source provenance
         uses: actions/upload-artifact@v7
         with:

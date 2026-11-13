@@ -17,7 +17,7 @@ const search = (): void => {
     <BreakStatus />
     <form class="flex gap-3 w-full max-w-xl" @submit.prevent="search">
       <SInput v-model="query" placeholder="搜索歌曲、歌手" class="flex-1" size="large" />
-      <SButton @click="search">搜索</SButton>
+      <SButton>搜索</SButton>
     </form>
     <p v-if="!canRequestNow()" role="status">上课中，点歌暂不可用</p>
     <SCard class="w-full max-w-xl" title="本次点歌">
