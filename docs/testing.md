@@ -2,11 +2,18 @@
 
 ## 云端入口
 
-- 现有 `test.yml` 支持 `workflow_dispatch`，并覆盖 Ubuntu 测试、Windows 原生测试和 Linux 原生音频测试。
-- 现有 `ci.yml` 在针对默认分支的 pull request 上执行格式、Lint 和类型检查。
-- 当前 GitHub 授权不允许写入 `.github/workflows`（缺少 workflow scope），因此新增功能分支工作流的提交被 GitHub 拒绝；不能声称该工作流已经创建。
-- 代码阶段完成后通过功能分支到 `dev` 的 pull request 触发检查，并使用已有可分发构建入口或请求具备 workflow 权限的授权补充 Windows 构建。
+- 草稿 PR #1 用于触发仓库现有 CI 和测试。
+- 当前 GitHub 授权不允许写入 `.github/workflows`（缺少 workflow scope），新增功能分支工作流未创建。
+- Windows 构建产物尚未生成。
 
-## 验证记录
+## 已添加的自动化测试
 
-待代码提交后记录实际运行编号、提交 SHA、结果和 artifact。未执行或未通过的项目不得标记为完成。
+- 课间起止边界。
+- 跨午夜延续和重叠拒绝。
+- 特殊日期替代、停用日期和 JSON 导入导出。
+- 绝对时间前后跳变。
+- 状态机清理等待、失败状态和提前结束课间。
+
+## 待记录
+
+实际运行编号、提交 SHA、结果、Windows artifact 和人工验证限制将在云端运行后补充。
