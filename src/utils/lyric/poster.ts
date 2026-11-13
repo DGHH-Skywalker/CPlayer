@@ -213,7 +213,7 @@ export const createLyricPoster = async (options: LyricPosterOptions): Promise<Bl
   await Promise.all([
     document.fonts.load(`bold 28px ${globalFont}`, title),
     document.fonts.load(`22px ${globalFont}`, artist),
-    document.fonts.load(`600 15px ${globalFont}`, "Made by SPlayer Next"),
+    document.fonts.load(`600 15px ${globalFont}`, "Made by Cplayer"),
     ...lines.flatMap((line) => [
       document.fonts.load(fontForText(line.text, "bold 34px", line.language), line.text),
       ...(line.translation
@@ -341,7 +341,7 @@ export const createLyricPoster = async (options: LyricPosterOptions): Promise<Bl
   ctx.fillStyle = "rgba(255, 255, 255, 0.4)";
   ctx.font = `600 15px ${globalFont}`;
   ctx.textAlign = "center";
-  ctx.fillText("Made by SPlayer Next", WIDTH / 2, totalHeight - PAD_BOTTOM - WATERMARK_H);
+  ctx.fillText("Made by Cplayer", WIDTH / 2, totalHeight - PAD_BOTTOM - WATERMARK_H);
 
   return new Promise((resolve, reject) => {
     canvas.toBlob(

@@ -1,0 +1,64 @@
+name: Cplayer Windows
+
+on:
+  push:
+    branches: ["feat/carbonv-school", "dev"]
+  pull_request:
+    branches: [dev]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: carbonv-windows-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CI: true
+  CSC_IDENTITY_AUTO_DISCOVERY: false
+
+jobs:
+  verify-and-package:
+    name: Verify and package Windows x64
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24.22.1
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: carbonv-windows-x64
+      - name: Use official Electron download
+        shell: bash
+        run: rm -f .npmrc
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Verify vendored Core checksum
+        run: node scripts/verify-bilikit.mjs
+      - name: Check types
+        run: pnpm typecheck
+      - name: Lint
+        run: pnpm lint
+      - name: Unit tests
+        run: pnpm test
+      - name: Electron browser isolation and early injection
+        run: pnpm test:electron
+      - name: Build native modules and Windows packages
+        run: pnpm build:win --x64 --publish never
+      - name: Upload installers, portable app and source provenance
+        uses: actions/upload-artifact@v7
+        with:
+          name: Cplayer-Windows-x64-${{ github.sha }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            dist/*-setup.exe
+            dist/*-portable.exe
+            docs/testing.md
+            vendor/bilikit/manifest.json

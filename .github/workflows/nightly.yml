@@ -20,6 +20,7 @@ env:
 jobs:
   # 智能检查 dev 分支自上次发布以来是否有新提交
   check-commits:
+    if: github.repository == 'SPlayer-Dev/SPlayer-Next'
     name: Check for new commits
     runs-on: ubuntu-latest
     outputs:
@@ -63,7 +64,7 @@ jobs:
   build:
     name: Build on ${{ matrix.name }}
     needs: check-commits
-    if: needs.check-commits.outputs.has_new_commits == 'true'
+    if: github.repository == 'SPlayer-Dev/SPlayer-Next' && (needs.check-commits.outputs.has_new_commits == 'true')
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
@@ -183,7 +184,7 @@ jobs:
   release:
     name: Publish Nightly Release
     needs: [check-commits, build]
-    if: needs.check-commits.outputs.has_new_commits == 'true'
+    if: github.repository == 'SPlayer-Dev/SPlayer-Next' && (needs.check-commits.outputs.has_new_commits == 'true')
     runs-on: ubuntu-latest
     steps:
       - name: Check out dev branch

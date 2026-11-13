@@ -222,7 +222,6 @@ const playerBarInnerClass = computed(() => {
   <!-- 全局设置 -->
   <SettingsDialog />
   <!-- 更新弹窗 -->
-  <UpdateDialog />
   <!-- 评论弹窗 -->
   <MusicCommentsDialog />
   <!-- 输出信息弹窗 -->

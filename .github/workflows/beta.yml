@@ -20,6 +20,7 @@ env:
 
 jobs:
   promote:
+    if: github.repository == 'SPlayer-Dev/SPlayer-Next'
     name: Promote Nightly to Beta
     runs-on: ubuntu-latest
     steps:

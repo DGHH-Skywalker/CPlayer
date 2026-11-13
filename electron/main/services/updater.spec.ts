@@ -1,3 +1,4 @@
+vi.mock("@shared/constants/customBuild", () => ({ CUSTOM_BUILD: false }));
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { EventEmitter } from "node:events";
 import { flushPromises } from "@vue/test-utils";

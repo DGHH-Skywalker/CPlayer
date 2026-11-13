@@ -28,7 +28,7 @@ const OFFICIAL_API = "https://api.amll.dev/v1/lyrics";
 
 const SEARCH_PAGE_SIZE = "50";
 
-const USER_AGENT = `SPlayer-Next/${appVersion} (https://github.com/SPlayer-Dev/SPlayer-Next)`;
+const USER_AGENT = `CarbonVPlayer/${appVersion} (https://github.com/DGHH-Skywalker/CPlayer)`;
 
 /** 搜索接口单条结果中用到的部分 */
 interface AmllSong {

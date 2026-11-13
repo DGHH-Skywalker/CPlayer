@@ -23,7 +23,7 @@ const jsonContent = (value: unknown) => ({
  */
 const createServer = (): McpServer => {
   const server = new McpServer({
-    name: "splayer-next",
+    name: "carbonv_player",
     version: appVersion,
   });
 

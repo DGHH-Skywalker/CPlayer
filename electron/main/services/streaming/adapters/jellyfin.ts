@@ -12,7 +12,7 @@ export interface StreamingAuthSession {
   userId: string;
 }
 
-const CLIENT_NAME = "SPlayer-Next";
+const CLIENT_NAME = "CarbonVPlayer";
 const CLIENT_VERSION = "1.0.0";
 const DEVICE_NAME = "SPlayer Desktop";
 const REQUEST_TIMEOUT_MS = 15_000;

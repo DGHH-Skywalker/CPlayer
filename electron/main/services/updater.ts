@@ -1,3 +1,4 @@
+import { CUSTOM_BUILD } from "@shared/constants/customBuild";
 import electronUpdater, { CancellationToken, type UpdateInfo } from "electron-updater";
 import { app, shell } from "electron";
 import { existsSync, readFileSync } from "node:fs";
@@ -165,6 +166,7 @@ const runCheck = (manual: boolean): void => {
  * @returns 请求处理后的即时快照，后续进展通过事件推送
  */
 export const checkForUpdates = (manual: boolean): UpdateState => {
+  if (CUSTOM_BUILD) return getUpdateState();
   if (manual || store.get("update.autoCheck")) runCheck(manual);
   return getUpdateState();
 };
@@ -174,6 +176,7 @@ export const checkForUpdates = (manual: boolean): UpdateState => {
  * @returns 即时快照，下载完成或失败通过事件推送
  */
 export const downloadUpdate = (): UpdateState => {
+  if (CUSTOM_BUILD) return getUpdateState();
   if (
     disposed ||
     task ||
@@ -221,6 +224,7 @@ export const downloadUpdate = (): UpdateState => {
 
 /** 配置写入、重置与导入共用此入口，撤销旧包资格并等待旧任务退出 */
 export const syncUpdateChannel = (): void => {
+  if (CUSTOM_BUILD) return;
   const channel = getChannel();
   if (state.channel === channel) return;
   generation++;
@@ -244,6 +248,7 @@ export const syncUpdateChannel = (): void => {
  * @returns 启动安装后的即时快照
  */
 export const quitAndInstall = (): UpdateState => {
+  if (CUSTOM_BUILD) return getUpdateState();
   if (
     disposed ||
     task ||
@@ -267,6 +272,7 @@ export const quitAndInstall = (): UpdateState => {
 
 /** 下载链接来自已验证的检查结果，商店版交给商店管理。 */
 export const openDownloadPage = (): void => {
+  if (CUSTOM_BUILD) return;
   void shell.openExternal(
     state.mode === "store"
       ? "ms-windows-store://updates"
@@ -303,6 +309,7 @@ const onError = (error: Error): void => {
 
 /** 初始化更新器；解压版只绕过安装形式检查，所有安装入口仍由 mode 拦截。 */
 export const initUpdater = (): void => {
+  if (CUSTOM_BUILD) return;
   disposed = false;
   autoUpdater.logger = updaterLog;
   autoUpdater.autoDownload = false;

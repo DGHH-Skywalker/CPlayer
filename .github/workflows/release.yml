@@ -28,6 +28,7 @@ concurrency:
 jobs:
   # 各平台/架构在对应的原生 runner 上独立构建
   build:
+    if: github.repository == 'SPlayer-Dev/SPlayer-Next'
     name: Build on ${{ matrix.name }}
     runs-on: ${{ matrix.runner }}
     strategy:
@@ -161,6 +162,7 @@ jobs:
 
   # 合并多架构更新清单并创建 GitHub 草稿 Release
   release:
+    if: github.repository == 'SPlayer-Dev/SPlayer-Next'
     name: Create GitHub Release
     needs: build
     runs-on: ubuntu-latest

@@ -1,8 +1,6 @@
 <script setup lang="ts">
-import { getContributors, type Contributor } from "@/apis/github";
+import type { Contributor } from "@/apis/github";
 import { useCopyText } from "@/composables/useCopyText";
-import { updateSection } from "@/settings/sections/update";
-import { useUpdateStore } from "@/stores/update";
 import { openExternal } from "@/utils/url";
 import {
   APP_VERSION,
@@ -33,7 +31,6 @@ const itemStyle = (index: number) => ({
 
 const { t } = useI18n();
 const { copy } = useCopyText();
-const update = useUpdateStore();
 
 /** 提交时间 */
 const commitTimeAgo = useTimeAgo(new Date(COMMIT_DATE));
@@ -41,9 +38,6 @@ const commitTimeAgo = useTimeAgo(new Date(COMMIT_DATE));
 const versions = window.electron.process.versions;
 /** 操作系统信息 */
 const osInfo = window.api.system.osInfo;
-
-/** 检查更新中 */
-const checking = computed(() => update.phase === "checking");
 
 /** 打开日志目录 */
 const handleOpenLogs = (): void => void window.api.system.openLogsDir();
@@ -112,14 +106,6 @@ const visibleDevelopers = computed(() =>
   showAllDevelopers.value ? developers.value : developers.value.slice(0, 6),
 );
 const hasMoreDevelopers = computed(() => developers.value.length > 6);
-
-onMounted(async () => {
-  try {
-    developers.value = await getContributors();
-  } catch (error) {
-    console.error("获取贡献者失败:", error);
-  }
-});
 </script>
 
 <template>
@@ -149,35 +135,12 @@ onMounted(async () => {
           </STag>
         </div>
         <div class="flex items-center gap-2">
-          <SButton
-            variant="secondary"
-            :loading="checking"
-            :disabled="['checking', 'cancelling', 'installing'].includes(update.phase)"
-            @click="update.checkManually()"
-          >
-            <template #icon><IconLucideRefreshCw /></template>
-            {{
-              IS_APPX
-                ? t("update.goStore")
-                : update.hasUpdate
-                  ? t("settings.about.newVersion")
-                  : checking
-                    ? t("settings.about.checking")
-                    : t("settings.about.checkUpdate")
-            }}
-          </SButton>
           <SButton variant="secondary" @click="handleOpenLogs">
             {{ t("settings.about.openLogs") }}
           </SButton>
         </div>
       </SCard>
     </section>
-    <SettingsSection
-      class="!mb-0"
-      :section="updateSection"
-      :highlight-key="highlightKey"
-      :start-index="2"
-    />
     <!-- 特别致谢 -->
     <section>
       <h3

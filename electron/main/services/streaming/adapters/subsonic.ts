@@ -9,7 +9,7 @@ import { streamPages } from "../pagination";
 
 // 基础端点只需要 1.13.0 的令牌鉴权，避免拒绝实现 1.15.0 的旧服务器
 const API_VERSION = "1.13.0";
-const CLIENT_NAME = "SPlayer-Next";
+const CLIENT_NAME = "CarbonVPlayer";
 const REQUEST_TIMEOUT_MS = 15_000;
 
 interface SubsonicSong {

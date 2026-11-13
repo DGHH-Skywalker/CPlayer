@@ -1,9 +1,9 @@
 {
-  "name": "splayer-next",
-  "productName": "SPlayer-Next",
-  "desktopName": "top.imsyy.splayer_next",
+  "name": "carbonv_player",
+  "productName": "Cplayer",
+  "desktopName": "app.carbonv.player",
   "version": "1.2.1",
-  "description": "Cross-platform desktop music player with rich lyric support and wide audio format compatibility",
+  "description": "CarbonVPlayer 校园课间点歌与 B 站 MV 桌面播放器",
   "type": "module",
   "packageManager": "pnpm@12.15.0",
   "main": "./out/main/index.js",
@@ -12,13 +12,13 @@
     "email": "imsyy1024@gmail.com",
     "url": "https://imsyy.top"
   },
-  "homepage": "https://splayer-next.imsyy.top",
+  "homepage": "https://github.com/DGHH-Skywalker/CPlayer",
   "repository": {
     "type": "git",
-    "url": "https://github.com/SPlayer-Dev/SPlayer-Next"
+    "url": "https://github.com/DGHH-Skywalker/CPlayer"
   },
   "bugs": {
-    "url": "https://github.com/SPlayer-Dev/SPlayer-Next/issues"
+    "url": "https://github.com/DGHH-Skywalker/CPlayer/issues"
   },
   "license": "AGPL-3.0",
   "license-file": "LICENSE",
@@ -51,7 +51,8 @@
     "docs:dev": "vitepress dev docs",
     "docs:build": "vitepress build docs",
     "docs:preview": "vitepress preview docs",
-    "prepare": "husky"
+    "prepare": "husky",
+    "test:electron": "node scripts/run-electron-smoke.mjs"
   },
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.2",

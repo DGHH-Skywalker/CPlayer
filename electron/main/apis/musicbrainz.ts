@@ -5,7 +5,7 @@ import { appVersion, getArtistCacheDir } from "@main/utils/config";
 import { toCacheUrl } from "@main/utils/protocol";
 
 /** MusicBrainz User-Agent */
-const UA = `SPlayer-Next/${appVersion} (https://github.com/SPlayer-Dev/SPlayer-Next)`;
+const UA = `CarbonVPlayer/${appVersion} (https://github.com/DGHH-Skywalker/CPlayer)`;
 
 /** 预取并发数 */
 const PREFETCH_CONCURRENCY = 2;

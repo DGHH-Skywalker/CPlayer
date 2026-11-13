@@ -1,3 +1,4 @@
+import { CUSTOM_BUILD } from "@shared/constants/customBuild";
 /**
  * 插件注册表
  *
@@ -422,6 +423,7 @@ class PluginRegistry extends EventEmitter {
 
   /** 启动时静默检查所有声明了 @updateUrl 的插件 */
   async checkAllUpdates(): Promise<void> {
+    if (CUSTOM_BUILD) return;
     const targets = [...this.runtimes.values()].filter((rt) => rt.manifest.updateUrl);
     await Promise.allSettled(targets.map((rt) => this.checkUpdate(rt.manifest.id)));
   }
