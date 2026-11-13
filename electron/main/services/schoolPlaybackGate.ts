@@ -1,6 +1,6 @@
 import type { SchoolPhase } from "@shared/types/school";
 
-let phaseProvider: () => SchoolPhase = () => "DISABLED";
+let phaseProvider: () => SchoolPhase = () => "TRANSITIONING";
 let enabledProvider: () => boolean = () => false;
 
 export const configureSchoolPlaybackGate = (
