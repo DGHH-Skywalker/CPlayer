@@ -1,5 +1,4 @@
 import type { Configuration } from "electron-builder";
-import { readFileSync } from "node:fs";
 import { SUPPORTED_AUDIO_EXTENSIONS } from "./shared/utils/audioFile";
 
 /** 音频后缀注册为文件关联 */
@@ -12,32 +11,15 @@ const fileAssociations = [...SUPPORTED_AUDIO_EXTENSIONS].map((extension) => {
   };
 });
 
-const packageVersion = JSON.parse(readFileSync("package.json", "utf8")).version as string;
-const prereleaseChannel = /-(beta|nightly|dev)(?:\.|$)/.exec(packageVersion)?.[1];
-// dev 构建只作为 Actions 产物，走 Nightly 通道更新
-const inferredUpdateChannel =
-  prereleaseChannel === "dev" ? "nightly" : (prereleaseChannel ?? "latest");
-const updateChannel = process.env.UPDATE_CHANNEL ?? inferredUpdateChannel;
-
-if (updateChannel !== "latest" && updateChannel !== "beta" && updateChannel !== "nightly") {
-  throw new Error(`不支持的更新通道: ${updateChannel}`);
-}
-if (packageVersion.includes("-") && !prereleaseChannel) {
-  throw new Error(`不支持的预发布版本格式: ${packageVersion}`);
-}
-if (updateChannel !== inferredUpdateChannel) {
-  throw new Error(`版本 ${packageVersion} 与更新通道 ${updateChannel} 不匹配`);
-}
-
 const config: Configuration = {
-  appId: "top.imsyy.splayer-next",
-  productName: "SPlayer-Next",
+  appId: "app.carbonv.player",
+  productName: "Cplayer",
   copyright: "Copyright © imsyy 2025",
   directories: { buildResources: "public" },
   fileAssociations,
   afterPack: "./scripts/after-pack.ts",
   compression: "maximum",
-  generateUpdatesFilesForAllChannels: true,
+  generateUpdatesFilesForAllChannels: false,
   files: [
     "public/**",
     "out/main/**",
@@ -64,6 +46,7 @@ const config: Configuration = {
   electronLanguages: ["zh-CN", "en-US"],
   asarUnpack: ["public/**"],
   extraResources: [
+    { from: "vendor/bilikit", to: "bilikit", filter: ["**/*"] },
     {
       from: "native/audio-engine",
       to: "native",
@@ -107,7 +90,7 @@ const config: Configuration = {
     },
   ],
   win: {
-    executableName: "SPlayer-Next",
+    executableName: "Cplayer",
     icon: "public/icons/logo.ico",
     artifactName: "${productName}-${version}-${arch}.${ext}",
     forceCodeSigning: false,
@@ -116,17 +99,14 @@ const config: Configuration = {
   },
   nsis: {
     oneClick: false,
-    guid: "top.imsyy.splayer-next",
+    guid: "app.carbonv.player",
     installerIcon: "public/icons/logo.ico",
     uninstallerIcon: "public/icons/logo.ico",
-    installerHeader: "build/installer/header.bmp",
-    installerSidebar: "build/installer/sidebar.bmp",
-    uninstallerSidebar: "build/installer/sidebar.bmp",
     include: "build/installer/installer.nsh",
     installerLanguages: ["en_US", "zh_CN"],
     artifactName: "${productName}-${version}-${arch}-setup.${ext}",
-    shortcutName: "SPlayer Next",
-    uninstallDisplayName: "SPlayer Next",
+    shortcutName: "Cplayer",
+    uninstallDisplayName: "Cplayer",
     createDesktopShortcut: "always",
     allowElevation: true,
     allowToChangeInstallationDirectory: true,
@@ -136,7 +116,7 @@ const config: Configuration = {
     artifactName: "${productName}-${version}-${arch}-portable.${ext}",
   },
   mac: {
-    executableName: "SPlayer-Next",
+    executableName: "Cplayer",
     icon: "public/icons/icon.icns",
     artifactName: "${productName}-${version}-${arch}.${ext}",
     identity: null,
@@ -160,7 +140,7 @@ const config: Configuration = {
     artifactName: "${productName}-${version}-${arch}.${ext}",
   },
   linux: {
-    executableName: "SPlayer-Next",
+    executableName: "Cplayer",
     icon: "public/icons/favicon-512x512.png",
     artifactName: "${name}-${version}-${arch}.${ext}",
     maintainer: "imsyy.top",
@@ -189,12 +169,7 @@ const config: Configuration = {
   electronDownload: {
     mirror: "https://npmmirror.com/mirrors/electron/",
   },
-  publish: {
-    provider: "github",
-    owner: "SPlayer-Dev",
-    repo: "SPlayer-Next",
-    channel: updateChannel,
-  },
+  publish: null,
 };
 
 export default config;

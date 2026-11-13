@@ -1,3 +1,4 @@
+import { registerBilibiliIpc } from "./bilibili";
 import { registerSchoolIpc } from "./school";
 import { registerSystemIpc } from "./system";
 import { registerPlayerIpc } from "./player";
@@ -32,6 +33,7 @@ import { registerAutoMixIpc } from "./automix";
  * @param onStartupComplete - 主界面启动完成后执行的应用初始化回调
  */
 export const registerIpcHandlers = (onStartupComplete: () => void): void => {
+  registerBilibiliIpc();
   registerSchoolIpc();
   registerSystemIpc();
   registerPlayerIpc();

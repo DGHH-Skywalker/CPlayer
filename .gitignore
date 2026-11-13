@@ -30,3 +30,5 @@ package-lock.json
 # Code signing certificates
 *.pfx
 *.p12
+
+.electron-browser-test.cjs

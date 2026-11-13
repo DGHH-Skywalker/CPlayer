@@ -13,6 +13,8 @@ export default defineConfig(
     "**/target/",
     "**/build/",
     "**/resources/",
+    "vendor/",
+    ".electron-browser-test.cjs",
     "**/public/",
     "**/.git/",
     "**/.vitepress/",

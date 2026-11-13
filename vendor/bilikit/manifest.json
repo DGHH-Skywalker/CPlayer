@@ -1,0 +1,14 @@
+{
+  "upstream": "https://github.com/shiinayane/BiliKit-Web",
+  "commit": "8b4fe351a95d01ec37a75a970f29773c8bbcaf89",
+  "version": "0.5.35",
+  "license": "MIT",
+  "entry": "src/entry-core.ts",
+  "sha256": "5f7d1fe6d76138fd1ce1ea8a756f9fc5a0b69c7d7e52219fb06f570ffd52de2f",
+  "originalSha256": "2698cc1aeeddc8f070853cb7858d52119490b272c08f49e3082ef45523d06a7f",
+  "modifications": [
+    "移除用户脚本 @icon 品牌图标",
+    "将脚本和面板显示名称替换为 Cplayer Web Core，原作者许可与来源单独保留"
+  ],
+  "build": "pnpm install --frozen-lockfile && pnpm build:core"
+}

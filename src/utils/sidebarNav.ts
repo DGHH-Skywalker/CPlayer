@@ -1,3 +1,4 @@
+import IconLucideTv from "~icons/lucide/tv";
 import type { Component } from "vue";
 import type { SystemConfig } from "@shared/types/settings";
 import IconLucideHome from "~icons/lucide/home";
@@ -27,6 +28,7 @@ export interface SidebarNavEntry {
 }
 
 const SIDEBAR_NAV_ENTRIES: SidebarNavEntry[] = [
+  { key: "/bilibili", labelKey: "nav.bilibili", icon: IconLucideTv },
   { key: "/", labelKey: "nav.home", icon: IconLucideHome, pinned: true },
   { key: "/library", labelKey: "nav.library", icon: IconLucideMusic },
   { key: "/artists/local", labelKey: "artist.label", icon: IconLucideUser },

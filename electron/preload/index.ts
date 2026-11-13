@@ -68,6 +68,14 @@ const getInstallType = (): "nsis" | "portable" | "appx" | "dmg" | "appimage" => 
 
 // 暴露给渲染进程的自定义 API
 const api = {
+  bilibili: {
+    command: (command: string, value?: unknown) =>
+      ipcRenderer.invoke("bilibili:command", command, value),
+    onState: (callback: (state: import("@shared/types/bilibili").BilibiliState) => void) => {
+      ipcRenderer.removeAllListeners("bilibili:state");
+      return subscribe("bilibili:state", callback);
+    },
+  },
   school: {
     get: () => ipcRenderer.invoke("school:get"),
     configure: (config: import("@shared/types/school").SchoolConfig) =>

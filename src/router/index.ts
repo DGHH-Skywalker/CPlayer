@@ -17,6 +17,7 @@ const router = createRouter({
       path: "/",
       component: () => import("@/layouts/MainLayout.vue"),
       children: [
+        { path: "bilibili", name: "bilibili", component: () => import("@/pages/Bilibili.vue") },
         {
           path: "",
           name: "home",
