@@ -13,6 +13,7 @@ vi.mock("localforage", () => ({
 }));
 
 import {
+  flushQueueWrites,
   findTrackIndex,
   getTrack,
   insertManyToQueue,
@@ -51,14 +52,15 @@ const entry = (id: string, playbackContext?: PlaybackContext): PlaybackQueueItem
 });
 
 describe("queue", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    await flushQueueWrites();
     queueEntries.value = [];
     originalQueue.value = null;
     storage.getItem.mockReset();
     storage.setItem.mockClear();
   });
 
-  it("替换队列时复制输入并清除洗牌备份", () => {
+  it("替换队列时复制输入并清除洗牌备份", async () => {
     const input = [track("a"), track("b")];
     originalQueue.value = [entry("old")];
 
@@ -67,6 +69,7 @@ describe("queue", () => {
 
     expect(queue.value.map(({ id }) => id)).toEqual(["a", "b"]);
     expect(originalQueue.value).toBeNull();
+    await flushQueueWrites();
     expect(storage.setItem).toHaveBeenCalledTimes(2);
   });
 

@@ -1,3 +1,4 @@
+import { stopPlaybackCompletely } from "@main/ipc/player";
 /**
  * 播放控制聚合入口
  *
@@ -9,8 +10,6 @@ import { randomUUID } from "node:crypto";
 import { getMainWindow } from "@main/window";
 import { queueQuerySchema } from "@main/services/music";
 import { getPlayer } from "@main/services/engine";
-import * as neteaseScrobble from "@main/services/neteaseScrobble";
-import * as lastfm from "@main/services/lastfm";
 import { sendToMain } from "@main/utils/broadcast";
 import { toMs } from "@main/utils/time";
 import type { ShuffleMode, RepeatMode, Track, PlayerState } from "@shared/types/player";
@@ -98,9 +97,7 @@ export const playerControl = {
       .catch(() => {}),
   pause: (): void => getPlayer().pause(),
   stop: (): void => {
-    neteaseScrobble.onStopped();
-    lastfm.onStopped();
-    getPlayer().stop();
+    stopPlaybackCompletely();
   },
   next: (): void => sendToMain("player:event", { type: "next" }),
   prev: (): void => sendToMain("player:event", { type: "prev" }),

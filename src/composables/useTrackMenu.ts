@@ -1,3 +1,4 @@
+import { isSchoolMode } from "@/stores/school";
 import type { Ref } from "vue";
 import type { PlaybackContext, Track } from "@shared/types/player";
 import type { QualityLevel } from "@/utils/quality";
@@ -83,7 +84,7 @@ export const useTrackMenu = (
       { key: "play", label: t("songList.context.play"), icon: markRaw(IconPlay), show: showPlay },
       {
         key: "playNext",
-        label: t("songList.context.playNext"),
+        label: isSchoolMode() ? "点歌（队尾）" : t("songList.context.playNext"),
         icon: markRaw(IconListEnd),
         show: showPlay,
       },

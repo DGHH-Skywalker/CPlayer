@@ -249,6 +249,7 @@ export const clear = (): void => {
   currentSource = null;
   currentLyricOffsetMs = 0;
   currentOffsetKey = "";
+  emitter.emit("track-change", { track: null });
   emitter.emit("lyric-change", snapshot());
   emitter.emit("lyric-offset-change", { trackId: null, offsetMs: 0 });
 };

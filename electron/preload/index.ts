@@ -68,6 +68,17 @@ const getInstallType = (): "nsis" | "portable" | "appx" | "dmg" | "appimage" => 
 
 // 暴露给渲染进程的自定义 API
 const api = {
+  school: {
+    get: () => ipcRenderer.invoke("school:get"),
+    configure: (config: import("@shared/types/school").SchoolConfig) =>
+      ipcRenderer.invoke("school:configure", config),
+    endBreak: () => ipcRenderer.invoke("school:endBreak"),
+    acknowledge: (id: string) => ipcRenderer.invoke("school:acknowledge", id),
+    onState: (callback: (snapshot: import("@shared/types/school").SchoolSnapshot) => void) => {
+      ipcRenderer.removeAllListeners("school:state");
+      return subscribe("school:state", callback);
+    },
+  },
   automix: {
     /**
      * 查询分析组件状态，不触发下载

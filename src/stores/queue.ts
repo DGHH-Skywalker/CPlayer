@@ -1,3 +1,4 @@
+import { canRequestNow } from "@/stores/school";
 import localforage from "localforage";
 import type { PlaybackContext, PlaybackQueueItem, Track } from "@shared/types/player";
 
@@ -36,20 +37,36 @@ export const originalQueue = shallowRef<PlaybackQueueItem[] | null>(null);
 /** 队列中的歌曲总数 */
 export const queueLength = computed(() => queue.value.length);
 
-/** 保存当前播放列表数据 */
-const save = (): void => {
-  db.setItem("playList", toRaw(queueEntries.value)).catch(console.error);
-  db.setItem("originalPlayList", toRaw(originalQueue.value)).catch(console.error);
+let revision = 0;
+let writes: Promise<void> = Promise.resolve();
+
+/** 保存不可变快照，所有队列写入按调用顺序落盘 */
+const save = (): Promise<void> => {
+  revision++;
+  const list = structuredClone(toRaw(queueEntries.value));
+  const original = structuredClone(toRaw(originalQueue.value));
+  const task = writes.catch(console.error).then(async () => {
+    await db.setItem("playList", list);
+    await db.setItem("originalPlayList", original);
+  });
+  writes = task;
+  void task.catch(console.error);
+  return task;
 };
+
+/** 等待当前全部写入任务，供清理与验证使用 */
+export const flushQueueWrites = (): Promise<void> => writes;
 
 /** 恢复播放列表数据 */
 export const restoreQueue = async (): Promise<void> => {
+  const token = revision;
+  await writes.catch(console.error);
   try {
     const [list, original] = await Promise.all([
       db.getItem<PersistedQueueItem[]>("playList"),
       db.getItem<PersistedQueueItem[] | null>("originalPlayList"),
     ]);
-    if (!list?.length) return;
+    if (token !== revision || !canRequestNow() || !list?.length) return;
     queueEntries.value = list.map(restoreQueueItem);
     originalQueue.value = original?.map(restoreQueueItem) ?? null;
   } catch (e) {
@@ -63,6 +80,7 @@ export const restoreQueue = async (): Promise<void> => {
  * @param context - 队列中曲目共用的播放来源上下文
  */
 export const setQueue = (items: readonly Track[], context?: PlaybackContext): void => {
+  if (!canRequestNow()) return;
   queueEntries.value = items.map((track) => createQueueItem(track, context));
   originalQueue.value = null;
   save();
@@ -75,6 +93,7 @@ export const setQueue = (items: readonly Track[], context?: PlaybackContext): vo
  * @param context - 播放来源上下文
  */
 export const insertToQueue = (item: Track, index: number, context?: PlaybackContext): void => {
+  if (!canRequestNow()) return;
   const entry = createQueueItem(item, context);
   const safeIndex = Math.max(0, Math.min(index, queueEntries.value.length));
   const next = [...queueEntries.value];
@@ -97,6 +116,7 @@ export const insertManyToQueue = (
   index: number,
   context?: PlaybackContext,
 ): void => {
+  if (!canRequestNow()) return;
   if (items.length === 0) return;
   const entries = items.map((track) => createQueueItem(track, context));
   const list = queueEntries.value;
@@ -213,10 +233,15 @@ export const moveInQueue = (fromIndex: number, toIndex: number): void => {
 /**
  * 清空队列和洗牌备份
  */
-export const clearQueue = (): void => {
+export const clearQueue = async (): Promise<void> => {
   queueEntries.value = [];
   originalQueue.value = null;
-  save();
+  await save();
+  const [list, original] = await Promise.all([
+    db.getItem<unknown[]>("playList"),
+    db.getItem("originalPlayList"),
+  ]);
+  if (list?.length || original) throw new Error("队列清空后存储校验失败");
 };
 
 /**
@@ -224,6 +249,7 @@ export const clearQueue = (): void => {
  * @param keepIndex - 保持在首位的歌曲索引（通常是当前正在播放的歌）
  */
 export const shuffleQueue = (keepIndex: number): void => {
+  if (!canRequestNow()) return;
   const currentQueue = queueEntries.value;
   if (currentQueue.length <= 1) return;
   const safeIndex = keepIndex >= 0 && keepIndex < currentQueue.length ? keepIndex : 0;

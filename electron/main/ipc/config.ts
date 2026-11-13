@@ -1,3 +1,5 @@
+import { validateSchoolConfig } from "@shared/school/schedule";
+import type { SchoolConfig } from "@shared/types/school";
 import fs from "node:fs/promises";
 import { dialog, ipcMain } from "electron";
 import { store } from "@main/store";
@@ -152,6 +154,8 @@ const applyConfigChange = (keyPath: string, value: unknown): void => {
 export const registerConfigIpc = (): void => {
   ipcMain.handle("config:get", (_event, keyPath: string) => store.get(keyPath as ConfigPath));
   ipcMain.handle("config:set", (_event, keyPath: string, value: unknown) => {
+    if (/^school(?:Runtime)?(?:\.|$)/.test(keyPath))
+      throw new Error("校园配置请通过校园控制中心修改");
     if (keyPath === "update.channel" && getUpdateState().phase === "installing") {
       throw new Error("安装启动中，无法切换更新通道");
     }
@@ -162,17 +166,23 @@ export const registerConfigIpc = (): void => {
     applyConfigChange(keyPath, value);
   });
   ipcMain.handle("config:getAll", () => store.store);
-  ipcMain.handle("config:reset", () => {
+  ipcMain.handle("config:reset", async () => {
     if (getUpdateState().phase === "installing") throw new Error("安装启动中，无法重置配置");
     store.clear();
+    if (store.get("school"))
+      (await import("@main/services/school")).getSchoolScheduler().configure(store.get("school"));
     syncUpdateChannel();
     refreshPowerBlocker();
   });
 
   /** 替换整盘配置 */
-  ipcMain.handle("config:replaceAll", (_event, payload: unknown) => {
+  ipcMain.handle("config:replaceAll", async (_event, payload: unknown) => {
     if (getUpdateState().phase === "installing") throw new Error("安装启动中，无法替换配置");
+    if (payload && typeof payload === "object" && "school" in payload)
+      validateSchoolConfig((payload as { school: SchoolConfig }).school);
     store.replaceAll(payload);
+    if (store.get("school"))
+      (await import("@main/services/school")).getSchoolScheduler().configure(store.get("school"));
     syncUpdateChannel();
     refreshPowerBlocker();
   });

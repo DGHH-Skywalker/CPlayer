@@ -44,20 +44,22 @@ describe("播放器重置时清理预载", () => {
   });
 
   it("重置释放已就绪槽位的租约，并不再保留旧实例记录", async () => {
+    (await import("./schoolPlaybackGate")).installSchoolGate(() => true);
     const service = await import("./playerPreload");
     const engine = await import("./engine");
     await service.prepareNextTrack("next", "next.wav");
     const previous = engine.getPlayer();
     engine.resetPlayer();
-    expect(previous.cancelPrepared).toHaveBeenCalledWith("next");
-    expect(previous.stop).toHaveBeenCalledOnce();
+    expect(mocks.instances[0].cancelPrepared).toHaveBeenCalledWith("next");
+    expect(mocks.instances[0].stop).toHaveBeenCalledOnce();
     expect(mocks.release).toHaveBeenCalledWith("next");
     service.cancelPreparedTrack();
-    expect(previous.cancelPrepared).toHaveBeenCalledOnce();
+    expect(mocks.instances[0].cancelPrepared).toHaveBeenCalledOnce();
     expect(engine.getPlayer()).not.toBe(previous);
   });
 
   it("原生取消失败仍释放租约并完成重置", async () => {
+    (await import("./schoolPlaybackGate")).installSchoolGate(() => true);
     const service = await import("./playerPreload");
     const engine = await import("./engine");
     await service.prepareNextTrack("next", "next.wav");
@@ -72,6 +74,7 @@ describe("播放器重置时清理预载", () => {
   });
 
   it("重置后旧任务迟到返回不能占用或取消新实例的槽位", async () => {
+    (await import("./schoolPlaybackGate")).installSchoolGate(() => true);
     const service = await import("./playerPreload");
     const engine = await import("./engine");
     engine.getPlayer();

@@ -1,3 +1,4 @@
+import type { SchoolConfig } from "./school";
 import type { PluginsConfig, PluginQuality } from "./plugin";
 import type { HotkeyConfig } from "./hotkey";
 import type { DownloadLyricFormat, DownloadFolderScheme } from "./download";
@@ -441,6 +442,8 @@ export type KugouLoginVersion = "standard" | "concept";
 
 /** 后端配置汇总 */
 export interface SystemConfig {
+  school: SchoolConfig;
+  schoolRuntime: { generation: number; pendingClear: string | null; lastCleared: string | null };
   /** 播放器配置 */
   player: PlayerSettings;
   /** 媒体集成配置 */

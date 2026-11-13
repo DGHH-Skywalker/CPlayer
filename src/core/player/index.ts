@@ -1,3 +1,6 @@
+import { initSchoolBridge } from "@/services/schoolScheduleBridge";
+import { isSchoolMode, canRequestNow } from "@/stores/school";
+import { requestSongs } from "@/services/requestPlayback";
 import type {
   IpcResponse,
   LoadResult,
@@ -165,6 +168,7 @@ export const load = async (
   meta?: Track,
   options: LoadRuntimeOptions = {},
 ): Promise<LoadOutcome> => {
+  if (!canRequestNow()) return { ok: false };
   const status = useStatusStore();
   const token = ++loadToken;
   // 切歌即清空 AB 循环（per-song 状态）
@@ -358,7 +362,7 @@ const loadTrack = async (
   transitionResult?: IpcResponse<LoadResult>,
   transitionSource?: ResolvedTrackSource,
 ): Promise<void> => {
-  if (!track) return;
+  if (!track || !canRequestNow()) return;
   // 跳过指定关键词歌曲
   const settings = useSettingsStore();
   if (
@@ -537,6 +541,7 @@ let pendingPlayAfterRestore = false;
 
 /** 恢复播放 */
 export const play = async (): Promise<void> => {
+  if (!canRequestNow()) return;
   const status = useStatusStore();
   if (isRestoringLastTrack) {
     pendingPlayAfterRestore = true;
@@ -625,11 +630,29 @@ export const stop = async (): Promise<void> => {
   status.trackLoading = false;
   const result = await window.api.player.stop();
   if (token !== trackToken) return;
+  if (!result.success) throw new Error(result.error ?? "停止播放失败");
   if (result.success) {
     status.state = "stopped";
     status.position = 0;
     playback.reset();
   }
+};
+
+/** 校园清理时同步作废歌词、封面取色和本次课间的展示状态 */
+export const resetPlaybackPresentation = (): void => {
+  lyricLoader.beginLoad();
+  extractColorFromUrl(null);
+  const status = useStatusStore();
+  status.state = "stopped";
+  status.position = 0;
+  status.duration = 0;
+  status.currentSource = null;
+  status.trackLoading = false;
+  status.transitioning = false;
+  status.fmMode = false;
+  status.heartMode = false;
+  status.playIndex = -1;
+  playback.reset();
 };
 
 /**
@@ -822,6 +845,10 @@ export const playFrom = async (
   items: readonly Track[],
   { startIndex, context }: PlayFromOptions = {},
 ): Promise<void> => {
+  if (isSchoolMode()) {
+    requestSongs(items, context);
+    return;
+  }
   if (items.length === 0) return;
   const status = useStatusStore();
   const media = useMediaStore();
@@ -962,6 +989,11 @@ export const dislikeFmTrack = async (): Promise<void> => {
  * @param autoPlay - 是否自动播放
  */
 export const nextTrack = async (autoPlay = true): Promise<void> => {
+  if (!canRequestNow()) return;
+  if (isSchoolMode() && useStatusStore().playIndex >= queue.queueLength.value - 1) {
+    await onQueueEnded();
+    return;
+  }
   const status = useStatusStore();
   // 私人 FM
   if (status.fmMode) {
@@ -999,6 +1031,7 @@ export const trySmartTransition = async (
   preparedId?: string,
   endPositionMs?: number,
 ): Promise<void> => {
+  if (isSchoolMode()) return;
   const settings = useSettingsStore();
   const status = useStatusStore();
   if (
@@ -1159,6 +1192,7 @@ const syncPlayMode = (): void => {
  * @param mode - list（列表循环）、one（单曲循环）
  */
 export const setRepeatMode = (mode: RepeatMode): void => {
+  if (isSchoolMode()) mode = "list";
   const status = useStatusStore();
   // 私人 FM 无循环，忽略切换并回推真实模式纠正系统媒体控件
   if (status.fmMode) {
@@ -1191,6 +1225,7 @@ export const toggleShuffleMode = (): void => {
  * @param mode - off（顺序）、on（随机）
  */
 export const setShuffleMode = (mode: ShuffleMode): void => {
+  if (isSchoolMode()) mode = "off";
   const status = useStatusStore();
   // 心动 / 私人 FM 禁止随机、模式无变化时不必洗牌，但都要回推真实模式纠正系统媒体控件
   if (status.heartMode || status.fmMode || status.shuffleMode === mode) {
@@ -1271,6 +1306,11 @@ export const insertToQueue = (
   afterIndex?: number,
   context?: PlaybackContext,
 ): number => {
+  if (!canRequestNow()) return -1;
+  if (isSchoolMode()) {
+    requestSongs([item], context);
+    return queue.findTrackIndex(item.id);
+  }
   const status = useStatusStore();
   const len = queue.queue.value.length;
   const raw = afterIndex ?? status.playIndex + 1;
@@ -1303,7 +1343,8 @@ export const insertManyToQueue = (
   position: "next" | "end" = "next",
   context?: PlaybackContext,
 ): number => {
-  if (items.length === 0) return 0;
+  if (!canRequestNow() || items.length === 0) return 0;
+  if (isSchoolMode()) return requestSongs(items, context);
   const status = useStatusStore();
   const seen = new Set(queue.queue.value.map((track) => track.id));
   const fresh: Track[] = [];
@@ -1323,6 +1364,10 @@ export const insertManyToQueue = (
  * 如果是当前正在播放的歌曲则继续播放，不重新加载
  */
 export const playNow = async (item: Track, context?: PlaybackContext): Promise<void> => {
+  if (isSchoolMode()) {
+    requestSongs([item], context);
+    return;
+  }
   const status = useStatusStore();
   const media = useMediaStore();
   // 同一首歌且已成功加载
@@ -1415,7 +1460,8 @@ export const initPlayer = async (): Promise<void> => {
   await settings.syncSystem();
   // 流媒体 store 必须在恢复队列前就绪，否则队列里的 streaming track 拿不到 cfg
   await useStreamingStore().init();
-  await queue.restoreQueue();
+  if (window.api.school) await initSchoolBridge();
+  if (!isSchoolMode()) await queue.restoreQueue();
   const status = useStatusStore();
   stopQueueIndexSync = watch(
     () => status.currentIndex,
@@ -1491,6 +1537,7 @@ export const initPlayer = async (): Promise<void> => {
 
 /** 恢复上次播放状态 */
 export const restoreLastTrack = async (): Promise<void> => {
+  if (isSchoolMode() || !canRequestNow()) return;
   const status = useStatusStore();
   const settings = useSettingsStore();
   const media = useMediaStore();

@@ -1,3 +1,5 @@
+import SchoolControlCenter from "@/components/settings/custom/SchoolControlCenter.vue";
+import IconLucideSchool from "~icons/lucide/school";
 import type { SettingCategory } from "@/types/settings-schema";
 import generalCategory from "./categories/general";
 import appearanceCategory from "./categories/appearance";
@@ -12,11 +14,11 @@ import downloadCategory from "./categories/download";
 import localCacheCategory from "./categories/localCache";
 import pluginsCategory from "./categories/plugins";
 import otherCategory from "./categories/other";
-import { updateSection } from "./sections/update";
 import AboutSettings from "@/components/settings/custom/AboutSettings.vue";
 import IconLucideInfo from "~icons/lucide/info";
 
 export const settingsSchema: SettingCategory[] = [
+  { id: "school", icon: IconLucideSchool, component: SchoolControlCenter, sections: [] },
   generalCategory,
   appearanceCategory,
   playerCategory,
@@ -30,5 +32,5 @@ export const settingsSchema: SettingCategory[] = [
   localCacheCategory,
   pluginsCategory,
   otherCategory,
-  { id: "about", icon: IconLucideInfo, component: AboutSettings, sections: [updateSection] },
+  { id: "about", icon: IconLucideInfo, component: AboutSettings, sections: [] },
 ];

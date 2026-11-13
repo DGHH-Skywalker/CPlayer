@@ -18,7 +18,7 @@
     "finish": "完成",
     "footer": "可随时在「设置」中调整本次未配置的内容",
     "welcome": {
-      "title": "欢迎使用 SPlayer-Next",
+      "title": "欢迎使用 Cplayer",
       "subtitle": "一个现代化的桌面音乐播放器，完成几步设置即可开始享用",
       "start": "开始设置",
       "features": {
@@ -49,11 +49,11 @@
     },
     "library": {
       "title": "本地音乐库",
-      "subtitle": "添加要扫描的音乐文件夹，SPlayer-Next 会自动建立曲库索引。可以添加多个目录，也可以之后再添加"
+      "subtitle": "添加要扫描的音乐文件夹，Cplayer 会自动建立曲库索引。可以添加多个目录，也可以之后再添加"
     },
     "streaming": {
       "title": "流媒体服务器",
-      "subtitle": "SPlayer-Next 支持连接 Subsonic 兼容服务和 Jellyfin / Emby，让你的家庭音乐服务器与播放器无缝集成",
+      "subtitle": "Cplayer 支持连接 Subsonic 兼容服务和 Jellyfin / Emby，让你的家庭音乐服务器与播放器无缝集成",
       "hint": "完成引导后，前往「设置 → 媒体源配置 → 流媒体管理」即可添加服务器并测试连接",
       "servers": {
         "subsonic": "Subsonic 兼容",
@@ -71,7 +71,7 @@
     },
     "hotkeys": {
       "title": "快捷键",
-      "subtitle": "SPlayer-Next 内置了完整的播放控制快捷键，需要时随时调用",
+      "subtitle": "Cplayer 内置了完整的播放控制快捷键，需要时随时调用",
       "tips": {
         "global": {
           "title": "全局快捷键",
@@ -237,7 +237,8 @@
       "album": "前往专辑「{id}」",
       "artist": "前往歌手「{id}」",
       "playlist": "前往歌单「{id}」"
-    }
+    },
+    "bilibili": "哔哩哔哩"
   },
   "recognition": {
     "title": "听歌识曲",
@@ -778,7 +779,8 @@
       "localCache": "本地与缓存",
       "plugins": "插件管理",
       "other": "其他设置",
-      "about": "关于软件"
+      "about": "关于软件",
+      "school": "校园点歌"
     },
     "section": {
       "platformLogin": "平台登录",

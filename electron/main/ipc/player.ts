@@ -399,6 +399,46 @@ const completeTrackLoad = (
   };
 };
 
+/** 完整停止：作废加载、预载、设备重建并释放原生音频 */
+export const stopPlaybackCompletely = () => {
+  loadSeq++;
+  cancelPendingReinit();
+  activeCueRange = null;
+  setCurrentTransitionRange();
+  let stopped = true;
+  try {
+    getPlayer().stop();
+  } catch (error) {
+    stopped = false;
+    playerLog.error("原生停止失败，保持校园锁定", error);
+  }
+  try {
+    cancelPreparedTrack();
+  } catch (error) {
+    playerLog.error("停止时取消预载失败", error);
+  }
+  void streamingPlayback
+    .stopStreamingPlayback()
+    .catch((error) => playerLog.error("停止流媒体会话失败", error));
+  neteaseScrobble.onStopped();
+  lastfm.onStopped();
+  return stopped ? { success: true as const } : fail(ErrorCode.UNKNOWN);
+};
+
+/** 校园硬截止时同步清除系统曲目和封面，即使渲染端尚未就绪 */
+export const clearSchoolPresentation = (): void => {
+  nowPlaying.clear();
+  playerControl.syncQueueIndex(-1);
+  mediaService.setMetadata({ title: appName, artists: [], album: "", durationMs: 0 });
+  mediaService.setPlayState({ status: "Paused" });
+  mediaService.setTimeline({ currentMs: 0, totalMs: 0 });
+  setTaskbarThumbnailCover(undefined);
+  setTraySongName(appName);
+  setTrayPlayState("paused");
+  getMainWindow()?.setTitle(appName);
+  setTaskbarProgress(-1);
+};
+
 /** 播放器相关 IPC */
 export const registerPlayerIpc = (): void => {
   ipcMain.handle(
@@ -707,20 +747,7 @@ export const registerPlayerIpc = (): void => {
 
   // 停止播放并释放资源
   ipcMain.handle("player:stop", () => {
-    loadSeq++;
-    void streamingPlayback.stopStreamingPlayback();
-    try {
-      neteaseScrobble.onStopped();
-      lastfm.onStopped();
-      cancelPreparedTrack();
-      cancelPendingReinit();
-      activeCueRange = null;
-      setCurrentTransitionRange();
-      getPlayer().stop();
-      return { success: true };
-    } catch (error) {
-      return fail(ErrorCode.UNKNOWN, error);
-    }
+    return stopPlaybackCompletely();
   });
 
   // 跳转到指定播放位置

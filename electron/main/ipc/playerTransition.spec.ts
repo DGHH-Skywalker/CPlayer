@@ -174,6 +174,15 @@ describe("交接响应的主进程竞态保护", () => {
     },
   );
 
+  it("预载取消失败或空队列也执行原生硬停止", async () => {
+    mocks.cancel.mockImplementationOnce(() => {
+      throw new Error("预载失败");
+    });
+    const { stopPlaybackCompletely } = await import("./player");
+    expect(stopPlaybackCompletely()).toEqual({ success: true });
+    expect(mocks.stop).toHaveBeenCalledOnce();
+  });
+
   it("停止后忽略旧交接错误，避免渲染端误触发下一曲", async () => {
     let reject!: (error: Error) => void;
     mocks.transition.mockImplementationOnce(

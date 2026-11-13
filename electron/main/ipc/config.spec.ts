@@ -1,3 +1,4 @@
+import { defaultSchoolConfig } from "@shared/school/schedule";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -7,6 +8,8 @@ const mocks = vi.hoisted(() => ({
   clear: vi.fn(),
   replaceAll: vi.fn(),
   sync: vi.fn(),
+  configure: vi.fn(),
+  get: vi.fn(),
 }));
 vi.mock("electron", () => ({
   dialog: {},
@@ -16,7 +19,10 @@ vi.mock("electron", () => ({
   },
 }));
 vi.mock("@main/store", () => ({
-  store: { set: mocks.set, clear: mocks.clear, replaceAll: mocks.replaceAll },
+  store: { set: mocks.set, clear: mocks.clear, replaceAll: mocks.replaceAll, get: mocks.get },
+}));
+vi.mock("@main/services/school", () => ({
+  getSchoolScheduler: () => ({ configure: mocks.configure }),
 }));
 vi.mock("@main/services/updater", () => ({
   getUpdateState: () => ({ phase: mocks.phase }),
@@ -48,16 +54,16 @@ describe("更新配置入口", () => {
     ["config:set", [null, "update.channel", "stable"], "set"],
     ["config:reset", [], "clear"],
     ["config:replaceAll", [null, { update: { channel: "beta" } }], "replaceAll"],
-  ] as const)("%s 写入后同步更新器，安装启动中拒绝改动", (channel, args, method) => {
+  ] as const)("%s 写入后同步更新器，安装启动中拒绝改动", async (channel, args, method) => {
     const invoke = mocks.handlers.get(channel)!;
-    invoke(...args);
+    await invoke(...args);
     expect(mocks[method]).toHaveBeenCalledOnce();
     expect(mocks.sync).toHaveBeenCalledOnce();
     expect(mocks[method].mock.invocationCallOrder[0]).toBeLessThan(
       mocks.sync.mock.invocationCallOrder[0],
     );
     mocks.phase = "installing";
-    expect(() => invoke(...args)).toThrow("安装启动中");
+    await expect(async () => invoke(...args)).rejects.toThrow("安装启动中");
     expect(mocks[method]).toHaveBeenCalledOnce();
   });
 
@@ -67,5 +73,13 @@ describe("更新配置入口", () => {
     );
     expect(mocks.set).not.toHaveBeenCalled();
     expect(mocks.sync).not.toHaveBeenCalled();
+  });
+  it("校园配置不能通过通用路径绕过调度校验，重置同步到调度器", async () => {
+    expect(() => mocks.handlers.get("config:set")!(null, "school.enabled", true)).toThrow(
+      "校园控制中心",
+    );
+    mocks.get.mockReturnValue(defaultSchoolConfig);
+    await mocks.handlers.get("config:reset")!();
+    expect(mocks.configure).toHaveBeenCalledWith(defaultSchoolConfig);
   });
 });

@@ -18,7 +18,7 @@
     "finish": "Finish",
     "footer": "You can adjust anything skipped here anytime in Settings",
     "welcome": {
-      "title": "Welcome to SPlayer-Next",
+      "title": "Welcome to Cplayer",
       "subtitle": "A modern desktop music player — a few quick steps and you're ready",
       "start": "Get Started",
       "features": {
@@ -49,7 +49,7 @@
     },
     "library": {
       "title": "Local Music Library",
-      "subtitle": "Add folders to scan and SPlayer-Next will index them automatically. You can add more later."
+      "subtitle": "Add folders to scan and Cplayer will index them automatically. You can add more later."
     },
     "streaming": {
       "title": "Streaming Servers",
@@ -71,7 +71,7 @@
     },
     "hotkeys": {
       "title": "Keyboard Shortcuts",
-      "subtitle": "SPlayer-Next ships with complete playback shortcuts you can use whenever you need them.",
+      "subtitle": "Cplayer ships with complete playback shortcuts you can use whenever you need them.",
       "tips": {
         "global": {
           "title": "Global shortcuts",
@@ -237,7 +237,8 @@
       "album": "Go to album [{id}]",
       "artist": "Go to artist [{id}]",
       "playlist": "Go to playlist [{id}]"
-    }
+    },
+    "bilibili": "Bilibili"
   },
   "recognition": {
     "title": "Music Recognition",
@@ -778,7 +779,8 @@
       "localCache": "Local & Cache",
       "plugins": "Plugin Manager",
       "other": "Other",
-      "about": "About"
+      "about": "About",
+      "school": "School requests"
     },
     "section": {
       "platformLogin": "Platform Login",

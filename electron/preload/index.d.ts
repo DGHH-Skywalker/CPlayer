@@ -38,6 +38,8 @@ declare global {
   interface Window {
     electron: ElectronAPI;
     api: {
+      bilibili: import("@shared/types/bilibili").BilibiliApi;
+      school: import("@shared/types/school").SchoolApi;
       config: ConfigApi;
       player: PlayerApi;
       automix: AutoMixApi;

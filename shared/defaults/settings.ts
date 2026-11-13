@@ -1,3 +1,4 @@
+import { defaultSchoolConfig } from "../school/schedule";
 import type { SystemConfig } from "../types/settings";
 import { defaultPluginsConfig } from "./plugin-api";
 import { defaultHotkeyConfig } from "./hotkeys";
@@ -12,6 +13,8 @@ export const DYNAMIC_ISLAND_BASE_HEIGHT = 40;
 
 /** 默认配置 */
 export const defaultSystemConfig: SystemConfig = {
+  school: defaultSchoolConfig,
+  schoolRuntime: { generation: 0, pendingClear: null, lastCleared: null },
   player: {
     autoPlay: false,
     rememberLastTrack: true,

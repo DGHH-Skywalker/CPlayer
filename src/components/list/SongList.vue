@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { isSchoolMode, canRequestNow } from "@/stores/school";
+import { requestSong } from "@/services/requestPlayback";
 import type { Artist, PlaybackContext, Track, TrackSource } from "@shared/types/player";
 import type { CollectionType } from "@/types/collection";
 import type { SongListSortKey, SongListSortPreference, SortField, SortOrder } from "@/types/list";
@@ -399,6 +401,10 @@ const onListContextMenu = (event: MouseEvent): void => {
  */
 const onTrackDblClick = (item: Track, index: number): void => {
   if (batch.active.value) return;
+  if (isSchoolMode()) {
+    requestSong(item, props.playbackContext);
+    return;
+  }
   if (route.name === "search" && settings.player.searchPlayBehavior !== "all") {
     void player.playNow(item, props.playbackContext);
     return;
@@ -414,6 +420,10 @@ const onTrackDblClick = (item: Track, index: number): void => {
 const onPlayClick = (item: Track, index: number): void => {
   if (batch.active.value) {
     batch.toggle(item.id);
+    return;
+  }
+  if (isSchoolMode()) {
+    requestSong(item, props.playbackContext);
     return;
   }
   if (playingId.value === item.id) {
@@ -855,6 +865,14 @@ defineExpose({
                   {{ item.album?.name || t("collection.unknownAlbum") }}
                 </span>
               </div>
+              <SButton
+                v-if="isSchoolMode()"
+                size="small"
+                :disabled="!canRequestNow()"
+                @click.stop="requestSong(item, props.playbackContext)"
+              >
+                点歌
+              </SButton>
               <!-- 收藏 -->
               <div
                 v-if="!batch.active.value && item.source !== 'plugin'"

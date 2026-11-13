@@ -1,3 +1,5 @@
+import { markPlaybackActivity } from "./playbackActivity";
+import { assertSchoolPlayback } from "./schoolPlaybackGate";
 import { loadNativeModule } from "@main/utils/nativeLoader";
 import { getCoverCacheDir, isDev } from "@main/utils/config";
 import { playerLog, nativeLogsDir } from "@main/utils/logger";
@@ -53,7 +55,33 @@ export const onPlayerCreated = (callback: (inst: PlayerInstance) => void): void 
 export const getPlayer = (): PlayerInstance => {
   if (!playerInstance) {
     const mod = getEngine();
-    playerInstance = new mod.AudioPlayer();
+    const native = new mod.AudioPlayer();
+    const starts = new Set([
+      "play",
+      "load",
+      "prepareNext",
+      "transitionToPrepared",
+      "reinitOutput",
+      "seek",
+    ]);
+    playerInstance = new Proxy(native, {
+      get(target, key) {
+        const value = Reflect.get(target, key, target);
+        if (typeof value !== "function") return value;
+        return (...args: unknown[]) => {
+          if (["play", "pause", "pauseImmediately", "stop", "load"].includes(String(key)))
+            markPlaybackActivity();
+          if (starts.has(String(key))) {
+            try {
+              assertSchoolPlayback();
+            } catch (error) {
+              return Promise.reject(error);
+            }
+          }
+          return value.apply(target, args);
+        };
+      },
+    });
     playerInstance.setCoverCacheDir(getCoverCacheDir());
     for (const cb of onCreatedCallbacks) {
       cb(playerInstance);

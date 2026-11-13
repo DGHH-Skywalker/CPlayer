@@ -1,3 +1,4 @@
+import { initSchool } from "@main/services/school";
 import { app, BrowserWindow } from "electron";
 import { electronApp, optimizer } from "@electron-toolkit/utils";
 import {
@@ -27,7 +28,6 @@ import {
 } from "@main/utils/protocol";
 import { startServer } from "@main/server";
 import { startMcpServer } from "@main/services/mcp/http";
-import { initUpdater } from "@main/services/updater";
 import { coreLog, initLogger } from "@main/utils/logger";
 import { initNetworkProxy } from "@main/utils/proxy";
 import { isAppQuitting } from "@main/utils/lifecycle";
@@ -110,7 +110,7 @@ export const initApp = (): void => {
   registerCacheScheme();
   // 其他初始化
   app.whenReady().then(() => {
-    electronApp.setAppUserModelId("top.imsyy.splayer-next");
+    electronApp.setAppUserModelId("app.carbonv.player");
     // 注册 cache:// 协议处理
     handleCacheProtocol();
     handleCacheProtocolOnPartition(MAIN_PARTITION);
@@ -126,11 +126,11 @@ export const initApp = (): void => {
         if (isAppQuitting()) return;
         void startServer();
         void startMcpServer();
-        void pluginRegistry.checkAllUpdates();
       });
     });
     // 初始化数据库
     initDatabase();
+    initSchool();
     // 创建主窗口
     const mainWindow = createMainWindow();
     // 播放配置同步前准备系统媒体控件，对外服务等待启动层退出。
@@ -157,7 +157,6 @@ export const initApp = (): void => {
     restoreLyricWindows();
     // 注册全局快捷键
     initGlobalHotkey();
-    initUpdater();
     // 周期记录各进程内存
     setTimeout(logProcessMemory, MEMORY_LOG_FIRST_DELAY_MS);
     setInterval(logProcessMemory, MEMORY_LOG_INTERVAL_MS);
