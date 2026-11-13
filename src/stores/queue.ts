@@ -240,8 +240,3 @@ export const unshuffleQueue = (currentTrackId: string): number => {
 export const findTrackIndex = (trackId: string): number => {
   return queueEntries.value.findIndex((track) => track.id === trackId);
 };
-
-export const clearQueuePersistenceForTests = async (): Promise<void> => {
-  await writeChain;
-  await db.clear();
-};
