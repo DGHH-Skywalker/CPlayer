@@ -30,7 +30,7 @@ export class SchoolScheduler {
     generation = 0,
   ) {
     this.snapshot = {
-      config: validateSchoolConfig(config),
+      config: structuredClone(validateSchoolConfig(config)),
       phase: "DISABLED",
       generation,
       activeId: null,
