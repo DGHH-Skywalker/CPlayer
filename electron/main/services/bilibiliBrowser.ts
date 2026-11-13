@@ -112,6 +112,12 @@ const create = async (): Promise<void> => {
       },
     });
     const wc = view.webContents;
+    // 使用标准桌面浏览器标识，保留 Chromium 版本以兼容站点播放器
+    wc.setUserAgent(
+      wc
+        .getUserAgent()
+        .replace(/\s(?:Electron|Cplayer|carbonv_player|CarbonVPlayer)\/[^\s]+/gi, ""),
+    );
     main.contentView.addChildView(view);
     const onHidden = (): void => {
       void pauseMedia();
