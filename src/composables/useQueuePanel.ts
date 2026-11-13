@@ -18,10 +18,10 @@ export const useQueuePanel = () => {
   };
 
   const clearAll = (): void => {
-    if (queueLength.value === 0) return;
-    player.stop();
+    player.invalidatePlaybackOperation();
+    void player.stop();
     statusStore.playIndex = -1;
-    clearQueue();
+    void clearQueue().catch(console.error);
     useMediaStore().clear();
     useThemeStore().coverColor = null;
     clearConfirmOpen.value = false;
