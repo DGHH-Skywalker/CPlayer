@@ -43,8 +43,17 @@ let writes: Promise<void> = Promise.resolve();
 /** 保存不可变快照，所有队列写入按调用顺序落盘 */
 const save = (): Promise<void> => {
   revision++;
-  const list = structuredClone(toRaw(queueEntries.value));
-  const original = structuredClone(toRaw(originalQueue.value));
+  const list = structuredClone(
+    queueEntries.value.map((item) => ({ track: toRaw(item.track), context: toRaw(item.context) })),
+  );
+  const original = originalQueue.value
+    ? structuredClone(
+        originalQueue.value.map((item) => ({
+          track: toRaw(item.track),
+          context: toRaw(item.context),
+        })),
+      )
+    : null;
   const task = writes.catch(console.error).then(async () => {
     await db.setItem("playList", list);
     await db.setItem("originalPlayList", original);

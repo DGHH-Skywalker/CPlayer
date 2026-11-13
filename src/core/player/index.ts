@@ -1,5 +1,5 @@
 import { initSchoolBridge } from "@/services/schoolScheduleBridge";
-import { isSchoolMode, canRequestNow } from "@/stores/school";
+import { isSchoolMode, canRequestNow, schoolState } from "@/stores/school";
 import { requestSongs } from "@/services/requestPlayback";
 import type {
   IpcResponse,
@@ -549,7 +549,10 @@ export const play = async (): Promise<void> => {
   }
   if ((status.state === "stopped" || status.state === "idle") && status.currentTrack) {
     const memoryPos = status.position;
-    await loadTrack(status.currentTrack, status.currentPlaybackContext);
+    const loading = loadTrack(status.currentTrack, status.currentPlaybackContext);
+    const operation = trackToken;
+    await loading;
+    if (operation !== trackToken || !canRequestNow()) return;
     if (useSettingsStore().system.player.rememberLastTrack && memoryPos > 0) {
       await seek(memoryPos);
     }
@@ -624,6 +627,8 @@ export const invalidatePlaybackOperation = (): number => {
 
 /** 停止播放并重置进度 */
 export const stop = async (): Promise<void> => {
+  isRestoringLastTrack = false;
+  pendingPlayAfterRestore = false;
   const token = invalidatePlaybackOperation();
   invalidateNextTrackPreload();
   const status = useStatusStore();
@@ -846,7 +851,7 @@ export const playFrom = async (
   { startIndex, context }: PlayFromOptions = {},
 ): Promise<void> => {
   if (isSchoolMode()) {
-    requestSongs(items, context);
+    requestSongs(startIndex == null ? items : items.slice(startIndex, startIndex + 1), context);
     return;
   }
   if (items.length === 0) return;
@@ -885,7 +890,12 @@ const resumeAfterTagWrite = async (
   lyricLoader.beginLoad();
   const result = await load(track.path, false, track);
   if (myToken !== trackToken || !result.ok) return;
-  if (resumeMs > 0) await seek(resumeMs);
+  if (resumeMs > 0) {
+    const seeking = seek(resumeMs);
+    const operation = trackToken;
+    await seeking;
+    if (operation !== trackToken) return;
+  }
   if (wasPlaying) await play();
   scheduleNextTrackPreload();
 };
@@ -913,11 +923,19 @@ export const saveTrackTags = async (edits: TagEditRequest[]): Promise<TagWriteOu
     await stop();
   }
 
+  const writeOperation = trackToken;
+  const schoolGeneration = schoolState.value.generation;
   const result = await window.api.library.writeTags(edits);
   if (!result.success || !result.data) {
     if (result.error) handleError(result.error);
     // 写入失败也要恢复被停掉的当前曲
-    if (touchesCurrent && current) await resumeAfterTagWrite(current, resumeMs, wasPlaying);
+    if (
+      touchesCurrent &&
+      current &&
+      writeOperation === trackToken &&
+      schoolGeneration === schoolState.value.generation
+    )
+      await resumeAfterTagWrite(current, resumeMs, wasPlaying);
     return null;
   }
 
@@ -929,7 +947,12 @@ export const saveTrackTags = async (edits: TagEditRequest[]): Promise<TagWriteOu
     queue.updateQueueTracks(updated);
   }
 
-  if (touchesCurrent && current) {
+  if (
+    touchesCurrent &&
+    current &&
+    writeOperation === trackToken &&
+    schoolGeneration === schoolState.value.generation
+  ) {
     const newTrack = updated.find((track) => track.path === currentPath) ?? current;
     await resumeAfterTagWrite(newTrack, resumeMs, wasPlaying);
   }
@@ -941,6 +964,10 @@ export const saveTrackTags = async (edits: TagEditRequest[]): Promise<TagWriteOu
  * @param tracks - NCM 智能推荐曲目
  */
 export const playHeartMode = async (tracks: readonly Track[]): Promise<void> => {
+  if (isSchoolMode()) {
+    requestSongs(tracks);
+    return;
+  }
   if (tracks.length === 0) return;
   const status = useStatusStore();
   queue.setQueue(tracks);
@@ -964,6 +991,10 @@ export const exitHeartMode = (): void => {
  * @returns 是否成功进入并开始播放
  */
 export const playPersonalFm = async (options?: PersonalFmOptions): Promise<boolean> => {
+  if (isSchoolMode()) {
+    toast.info("校园模式使用顺序点歌队列");
+    return false;
+  }
   const status = useStatusStore();
   const track = await fm.start(options);
   if (!track) return false;
@@ -1548,6 +1579,7 @@ export const restoreLastTrack = async (): Promise<void> => {
   }
   isRestoringLastTrack = true;
   pendingPlayAfterRestore = false;
+  const myToken = ++trackToken;
   const lastPosition = status.position;
   media.setTrack(lastTrack);
   media.setPlaybackContext(status.currentPlaybackContext);
@@ -1557,11 +1589,15 @@ export const restoreLastTrack = async (): Promise<void> => {
       lastTrack,
       status.currentPlaybackContext,
       settings.system.player.autoPlay,
-      () => true,
+      () => myToken === trackToken && !isSchoolMode() && canRequestNow(),
     );
+    if (myToken !== trackToken || loaded.status === "cancelled") return;
     if (loaded.status === "loaded" && loaded.result.ok) {
       if (settings.system.player.rememberLastTrack && lastPosition > 0) {
-        await seek(lastPosition);
+        const seeking = seek(lastPosition);
+        const operation = trackToken;
+        await seeking;
+        if (operation !== trackToken) return;
       }
       if (loaded.resolved.cacheRequest) {
         cacheScheduler.schedule(lastTrack.id, loaded.resolved.cacheRequest);

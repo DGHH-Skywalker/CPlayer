@@ -10,7 +10,11 @@ let unsubscribe: (() => void) | null = null;
  * @param snapshot - 主进程快照
  */
 const apply = async (snapshot: SchoolSnapshot): Promise<void> => {
-  if (snapshot.generation < schoolState.value.generation) return;
+  if (
+    snapshot.generation < schoolState.value.generation ||
+    (snapshot.pendingClear !== null && snapshot.pendingClear === schoolState.value.lastCleared)
+  )
+    return;
   schoolState.value = snapshot;
   if (!snapshot.pendingClear || clearing === snapshot.pendingClear) return;
   clearing = snapshot.pendingClear;

@@ -78,8 +78,7 @@ export const stopAndClearForClass = async (eventId?: string): Promise<void> => {
   player.resetPlaybackPresentation();
   useMediaStore().clear();
   const clearing = queue.clearQueue();
-  await stopping;
-  await clearing;
+  await Promise.all([stopping, clearing]);
   if (eventId) {
     const snapshot = await window.api.school.acknowledge(eventId);
     if (snapshot.generation >= schoolState.value.generation) schoolState.value = snapshot;

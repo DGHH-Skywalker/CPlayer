@@ -22,6 +22,8 @@ let creating: Promise<void> | null = null;
 let lastConfig = "";
 let bounds = { x: 0, y: 0, width: 0, height: 0 };
 let theater = false;
+let htmlFullscreen = false;
+let removeWindowListeners: (() => void) | null = null;
 let visibilityGeneration = 0;
 let error: string | null = null;
 let mediaPlaying = false;
@@ -111,6 +113,18 @@ const create = async (): Promise<void> => {
     });
     const wc = view.webContents;
     main.contentView.addChildView(view);
+    const onHidden = (): void => {
+      void pauseMedia();
+    };
+    const onClosed = (): void => destroy();
+    main.on("hide", onHidden);
+    main.on("minimize", onHidden);
+    main.once("closed", onClosed);
+    removeWindowListeners = () => {
+      main.removeListener("hide", onHidden);
+      main.removeListener("minimize", onHidden);
+      main.removeListener("closed", onClosed);
+    };
     view.setVisible(false);
     wc.setWindowOpenHandler(({ url }) => {
       if (isBilibiliUrl(url))
@@ -163,11 +177,15 @@ const create = async (): Promise<void> => {
       publish();
     });
     wc.on("enter-html-full-screen", () => {
+      htmlFullscreen = true;
       if (!view) return;
       const [width, height] = main.getContentSize();
       view.setBounds({ x: 0, y: 0, width, height });
     });
-    wc.on("leave-html-full-screen", () => view?.setBounds(bounds));
+    wc.on("leave-html-full-screen", () => {
+      htmlFullscreen = false;
+      view?.setBounds(bounds);
+    });
     wc.on("media-started-playing", () => {
       void reportMedia(true);
     });
@@ -200,7 +218,10 @@ const reportMedia = async (playing: boolean): Promise<void> => {
   mediaPlaying = playing;
   if (
     playing &&
-    (!visible || (store.get("school.bilibili.pauseOnClass") && !schoolAllowsPlayback()))
+    (!visible ||
+      !getMainWindow()?.isVisible() ||
+      getMainWindow()?.isMinimized() ||
+      (store.get("school.bilibili.pauseOnClass") && !schoolAllowsPlayback()))
   ) {
     coordinator.invalidate();
     await pauseMedia();
@@ -222,6 +243,9 @@ export const onSchoolCutoff = (): void => {
 /** 销毁视图与其注入资源，保留独立会话数据 */
 const destroy = (): void => {
   visibilityGeneration++;
+  htmlFullscreen = false;
+  removeWindowListeners?.();
+  removeWindowListeners = null;
   coordinator.invalidate();
   loader?.dispose();
   loader = null;
@@ -335,7 +359,7 @@ export const bilibiliCommand = async (command: string, value?: unknown): Promise
         width: Math.min(width, Math.round(b.width * zoom)),
         height: Math.min(height, Math.round(b.height * zoom)),
       };
-      view!.setBounds(bounds);
+      view!.setBounds(htmlFullscreen ? { x: 0, y: 0, width, height } : bounds);
       break;
     }
     case "navigate":

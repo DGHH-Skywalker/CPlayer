@@ -94,4 +94,9 @@ describe("队列清理与持久化竞态", () => {
     await clearQueue();
     expect(storage.data.get("playList")).toEqual([]);
   });
+  it("Vue 代理曲目在快照时转为原始对象，可持久化而不触发 DataCloneError", async () => {
+    setQueue([reactive(track("proxy"))]);
+    await flushQueueWrites();
+    expect((storage.data.get("playList") as Array<{ track: Track }>)[0].track.id).toBe("proxy");
+  });
 });

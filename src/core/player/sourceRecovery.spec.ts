@@ -269,3 +269,30 @@ describe("在线歌曲暂停后地址失效恢复", () => {
     expect(media.track?.id).toBe(available ? "current" : "next");
   });
 });
+
+it("校园切换后迟到的历史恢复不能在下一课间重新加载旧歌曲", async () => {
+  let finish!: (value: unknown) => void;
+  mocks.request.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  const restoring = player.restoreLastTrack();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(mocks.request).toHaveBeenCalled();
+  await player.stop();
+  const { schoolState } = await import("@/stores/school");
+  schoolState.value = {
+    ...schoolState.value,
+    generation: 2,
+    phase: "BREAK",
+    endAt: Date.now() + 60000,
+    config: { ...schoolState.value.config, enabled: true, scheduleEnabled: true },
+  };
+  finish({ data: [{ url: newUrl, freeTrialInfo: null }] });
+  await restoring;
+  expect(mocks.load).not.toHaveBeenCalled();
+  expect(mocks.play).not.toHaveBeenCalled();
+  expect(status.state).toBe("stopped");
+});

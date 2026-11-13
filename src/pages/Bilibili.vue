@@ -70,6 +70,7 @@ onMounted(async () => {
   });
   document.addEventListener("visibilitychange", scheduleBounds);
   window.addEventListener("resize", scheduleBounds);
+  window.addEventListener("scroll", scheduleBounds, true);
   await syncBounds();
 });
 onBeforeUnmount(() => {
@@ -79,6 +80,7 @@ onBeforeUnmount(() => {
   cancelAnimationFrame(frame);
   document.removeEventListener("visibilitychange", scheduleBounds);
   window.removeEventListener("resize", scheduleBounds);
+  window.removeEventListener("scroll", scheduleBounds, true);
   void window.api.bilibili.command("hide");
 });
 </script>
