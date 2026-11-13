@@ -22,7 +22,7 @@
 
 ## document-start
 
-BilikitLoader 在首次 loadURL 前 attach CDP，启用 Page 并 addScriptToEvaluateOnNewDocument，不指定 worldName，因此处于网页主世界。脚本包装器校验域名。通过 Target.setAutoAttach + waitForDebuggerOnStart 对跨进程 iframe 在继续运行前注册脚本；同进程 iframe 由 Page 的新文档脚本覆盖。每次变更先 removeScriptToEvaluateOnNewDocument，再注册下一份。临时禁用只改内存标志并重新加载，不清 Cookie；退出后恢复持久配置。
+BilikitLoader 先通过本地 about:blank 初始化 CDP 文档目标，再 attach CDP、启用 Page 并 addScriptToEvaluateOnNewDocument，在首次远程 B 站 loadURL 前完成注册。不指定 worldName，因此处于网页主世界。脚本包装器校验域名。通过 Target.setAutoAttach + waitForDebuggerOnStart 对跨进程 iframe 在继续运行前注册脚本；同进程 iframe 由 Page 的新文档脚本覆盖。每次变更先 removeScriptToEvaluateOnNewDocument，再注册下一份。临时禁用只改内存标志并重新加载，不清 Cookie；退出后恢复持久配置。
 
 Core 开始前仅修改 bilikit:settings 中 module.no-login.enabled，并合并跨子域 bilikit_settings Cookie；写 Cookie 时过滤凭据键，保留其他非敏感配置，不将本域私密键复制到 Cookie。关闭 Core 也同步关闭免登录状态，并清除没有真实登录指纹的模拟 DedeUserID。真实 SESSDATA 不由配置同步层读取或传播。
 
@@ -31,3 +31,5 @@ Core 开始前仅修改 bilikit:settings 中 module.no-login.enabled，并合并
 ## 兼容性边界
 
 免登录模块使用上游官方试看接口，无法保证所有视频 1080P 或会员画质。真实登录/退出、B 站实时搜索、弹幕、评论、SPA 页面和接口可用性需要网络环境及用户实际账号验证。自动化 fixture 只能证明 Electron 注入时机和会话隔离，不能替代这些站点验收。Core 关闭后原生网页功能保留。
+
+浏览器使用保留 Chromium 版本的标准桌面 User-Agent，移除应用和 Electron 产品标识。当前环境已实测关闭 Core 时匿名公开视频解码播放；开启 Core 时提前注入和接口请求通过，但所测视频未输出解码帧，1080P 增强尚未通过站点验收。可在控制中心关闭 Core 后使用原生网页，具体记录与复现步骤见 testing.md。

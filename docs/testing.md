@@ -6,16 +6,44 @@ Linux，Node 24.22.1、工程指定 pnpm 12.15.0、Electron 44.10.1。原始提�
 
 安装时预装 pnpm 11.25.0 不满足约束，使用 Corepack 安装指定版本。Electron 下载需继承代理，安装完成后原生 SQLite 重建成功。当前 Linux 缺 Rust、ALSA/DBus/Pulse/PipeWire 开发包；Windows 完整打包由 GitHub Actions 原生 runner 执行。
 
-## 新功能验证
+## 已完成的最终本地验证
 
-- 调度与原队列测试 22 项通过
-- 调度、MV、域名导航、队列持久化竞态测试 22 项通过
-- 原生播放闸门测试 2 项通过
-- 受影响播放器预载、流媒体列表和上游兼容更新服务回归 28 项通过
-- Node 全量测试 53 项通过
-- 类型检查、ESLint 和 electron-vite 生产编译已通过首轮，最终结果以本文件后续记录及 Actions 为准
+| 检查                              | 结果                                                                    |
+| --------------------------------- | ----------------------------------------------------------------------- |
+| pnpm typecheck                    | Node 与 Web 均通过                                                      |
+| pnpm lint                         | 通过，0 errors                                                          |
+| pnpm test:node                    | 53 项全部通过                                                           |
+| pnpm test:web                     | 80 个文件、629 项全部通过                                               |
+| pnpm test:electron                | Electron 44.10.1 真实文档、子域、跨进程框架和 Session 隔离验证通过      |
+| Core 上游 pnpm test               | 19 个文件、107 项全部通过                                               |
+| node scripts/verify-bilikit.mjs   | 固定资源 SHA-256 通过                                                   |
+| SKIP_NATIVE_BUILD=true pnpm build | Electron 主进程、preload 与全部 Vue 生产编译通过；不包含 Linux 原生模块 |
+| 本地 pnpm build                   | Rust 工具链缺失，原生构建阶段失败，转由 Windows Actions 完整构建        |
 
-以上测试集合存在交集，不能相加作为总测试数。最终全量检查和真实 Electron fixture 正在执行。
+功能测试覆盖 FIFO、去重、人工排序、课间边界、启动清理、跨午夜、特殊日期、周期间冲突、停用日期不能掩盖周表重叠、系统时间跳变、睡眠后跨入新课间、重复确认、未确认清理重投、旧写入迟到、Vue 代理快照、恢复与清空并发、迟到历史恢复、迟到状态与曲尾事件、MV 恢复所有权和安全导航。
+
+Windows Actions 已验证所有 Rust 模块、类型、Lint、单元测试和真实 Electron fixture。前两轮在 NSIS 打包处发现默认头图缺失、未初始化句柄引发的严格警告，已分别修复。
+
+## 最终 Windows 构建与下载
+
+- 产品代码提交：`29c67cb41cea75035fa3d667e7f4a6b14c5b52a5`
+- 分支：`feat/carbonv-school`，仓库：<https://github.com/DGHH-Skywalker/CPlayer>
+- Actions：<https://github.com/DGHH-Skywalker/CPlayer/actions/runs/43454412395>
+- 完成时间：2026-11-13 15:52:48 UTC，结论 success
+- 下载：<https://github.com/DGHH-Skywalker/CPlayer/actions/runs/43454412395/artifacts/14053439420>
+- Artifact 名称：`Cplayer-Windows-x64-29c67cb41cea75035fa3d667e7f4a6b14c5b52a5`，大小 232570551 字节，保留 30 天
+- Artifact ZIP SHA-256：`f742c49fd8e435acdac074d84cc4e360028b93f5eae81c27cde0279344ea84bf`
+- 安装包：`Cplayer-1.2.1-x64-setup.exe`
+- 便携版：`Cplayer-1.2.1-x64-portable.exe`
+
+| 文件     | SHA-256                                                            |
+| -------- | ------------------------------------------------------------------ |
+| setup    | `aed02ae17aa175f3173e2dd6a5e5c12b527e7bc94c6d74b7c5dbcff6dd2f0658` |
+| portable | `b012d1c22e9b90e96c0578fbce0a428ea56d53a42ac3f686c88d6b759cdb7e49` |
+
+该轮在 Windows 原生 runner 完成全部 Rust 模块构建、类型检查、Lint、53 项 Node 和 629 项 Web 测试、真实 Electron 隔离及提前注入验证、NSIS 和 portable 打包。随后实际启动生成的 portable EXE，确认打包后的 preload 可用、校园空时间表进入 CLASS、原生播放被拒绝、打包 Core 为 0.5.35，并关闭校园模式恢复 DISABLED。Actions 的便携版检查步骤输出 `success=true`、`packagedPreload=true`、`classGate=true`；artifact 内的 portable-smoke.log 本轮为空，检查结论以该步骤日志为准。
+
+两个 EXE 未配置代码签名证书。NSIS 已成功生成，安装、卸载向导的人工交互尚未执行。最终文档提交不改变上述产品代码，使用 `[skip ci]` 避免重复打包。
 
 ## 需要 Windows / 实际账号验收
 
@@ -38,3 +66,11 @@ Linux，Node 24.22.1、工程指定 pnpm 12.15.0、Electron 44.10.1。原始提�
 该测试使用受控 HTTPS fixture，不访问真实账号，不代表 B 站实时接口或 1080P 已验证。为初始化 CDP，先加载本地 about:blank；在首次远程 B 站导航前完成注册。最初直接对无文档 WebContentsView 执行 Page.enable 会等待，这一实测问题已修复。
 
 固定 Core 上游测试：19 个文件、107 项通过。资源 SHA-256：`5f7d1fe6d76138fd1ce1ea8a756f9fc5a0b69c7d7e52219fb06f570ffd52de2f`。
+
+同一受控文档中，Core 关闭与开启后 `app.getAppMetrics()` 的各进程工作集总和分别约 490.7 MiB、503.0 MiB，增加约 12.3 MiB。此为短时 fixture 样本，包含 Browser、GPU、Utility 及 iframe 进程，不代表真实 B 站长期运行占用或完整应用性能基准；长期使用应继续观察应用启动 60 秒及每 10 分钟的现有内存日志。
+
+## 真实 B 站访问记录
+
+在全新、未登录的内存 Session 中实测，B 站首页与 nav 接口 HTTP 200，页面可完整加载。采用标准桌面 Chromium 标识、关闭 Core 时，公开视频实际解码播放：readyState=4，分辨率 494×360，SESSDATA 不存在，远程页面 require 不可用。
+
+开启 Core 与免登录增强后，主世界提前注入已确认，playurl 接口 HTTP 200、CDN 范围请求 HTTP 206，但所测视频在观察时间内未输出解码帧；1080P 试看不能记为通过。热门列表接口另观察到 code=-352，旧测试视频链接曾跳转站点错误页。真实账号登录/退出、其他视频、弹幕和评论交互、增强清晰度仍按上方人工步骤验收。关闭 Core 的原生网页和基本播放已实测可用。

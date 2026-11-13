@@ -21,3 +21,5 @@ Cplayer 在 DGHH-Skywalker/CPlayer 上扩展，原始 SPlayer-Next AGPL-3.0 许�
 ## 构建
 
 `.github/workflows/carbonv-windows.yml` 在 Windows 原生 runner 安装锁定依赖、检查 Core 校验值、类型、Lint、测试，构建 Rust 模块及 NSIS / portable EXE，上传 Actions artifact。旧上游发布工作流对本 Fork 关闭。应用 updater 和启动插件版本检查关闭，Core 只读取随程序打包的本地文件。
+
+校园首页在挂载前读取主进程模式。Home 仅为模式入口，普通首页完整保存在 MusicHome 中并按需挂载，校园搜索页不会加载普通首页的推荐和继续收听数据。模式切换保留同一个上游全局设置、歌曲列表和播放器。
