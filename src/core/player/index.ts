@@ -885,6 +885,7 @@ const resumeAfterTagWrite = async (
 ): Promise<void> => {
   if (!track.path) return;
   const myToken = ++trackToken;
+  const myPauseToken = pauseToken;
   invalidateNextTrackPreload();
   useMediaStore().setTrack(track);
   lyricLoader.beginLoad();
@@ -896,7 +897,7 @@ const resumeAfterTagWrite = async (
     await seeking;
     if (operation !== trackToken) return;
   }
-  if (wasPlaying) await play();
+  if (wasPlaying && myPauseToken === pauseToken) await play();
   scheduleNextTrackPreload();
 };
 
@@ -908,6 +909,9 @@ const resumeAfterTagWrite = async (
  */
 export const saveTrackTags = async (edits: TagEditRequest[]): Promise<TagWriteOutcome[] | null> => {
   if (edits.length === 0) return [];
+  const schoolGeneration = schoolState.value.generation;
+  const originalPauseToken = pauseToken;
+  let interrupted = false;
   const media = useMediaStore();
   const status = useStatusStore();
   const current = media.track;
@@ -920,11 +924,13 @@ export const saveTrackTags = async (edits: TagEditRequest[]): Promise<TagWriteOu
     resumeMs = Math.round(playback.getCurrentTime());
     wasPlaying = status.isPlaying;
     // Windows 下引擎持有文件句柄，必须先停止才能写入
-    await stop();
+    const stopping = stop();
+    const stoppingOperation = trackToken;
+    await stopping;
+    interrupted = stoppingOperation !== trackToken;
   }
 
   const writeOperation = trackToken;
-  const schoolGeneration = schoolState.value.generation;
   const result = await window.api.library.writeTags(edits);
   if (!result.success || !result.data) {
     if (result.error) handleError(result.error);
@@ -932,10 +938,11 @@ export const saveTrackTags = async (edits: TagEditRequest[]): Promise<TagWriteOu
     if (
       touchesCurrent &&
       current &&
+      !interrupted &&
       writeOperation === trackToken &&
       schoolGeneration === schoolState.value.generation
     )
-      await resumeAfterTagWrite(current, resumeMs, wasPlaying);
+      await resumeAfterTagWrite(current, resumeMs, wasPlaying && originalPauseToken === pauseToken);
     return null;
   }
 
@@ -950,11 +957,12 @@ export const saveTrackTags = async (edits: TagEditRequest[]): Promise<TagWriteOu
   if (
     touchesCurrent &&
     current &&
+    !interrupted &&
     writeOperation === trackToken &&
     schoolGeneration === schoolState.value.generation
   ) {
     const newTrack = updated.find((track) => track.path === currentPath) ?? current;
-    await resumeAfterTagWrite(newTrack, resumeMs, wasPlaying);
+    await resumeAfterTagWrite(newTrack, resumeMs, wasPlaying && originalPauseToken === pauseToken);
   }
   return result.data;
 };

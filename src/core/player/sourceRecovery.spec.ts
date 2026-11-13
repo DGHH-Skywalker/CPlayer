@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   pause: vi.fn(),
   seek: vi.fn(),
   stop: vi.fn(),
+  writeTags: vi.fn(),
   toast: vi.fn(),
 }));
 
@@ -88,6 +89,7 @@ beforeEach(async () => {
         seek: mocks.seek,
         stop: mocks.stop,
       },
+      library: { writeTags: mocks.writeTags },
       download: { lookup: async () => null },
       nowPlaying: { update: vi.fn() },
     },
@@ -323,6 +325,34 @@ it("上课后的迟到状态与曲尾事件不能恢复播放状态或触发下�
   expect(status.state).toBe("stopped");
   expect(status.position).toBe(0);
   expect(status.duration).toBe(0);
+  expect(mocks.load).not.toHaveBeenCalled();
+  expect(mocks.play).not.toHaveBeenCalled();
+});
+
+it("标签写入的停止等待期间上课，下一课间不能恢复旧曲目", async () => {
+  media.setTrack({ ...tracks[0]!, source: "local", path: "C:/class.wav" });
+  status.state = "playing";
+  let stopped!: (value: unknown) => void;
+  mocks.stop.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        stopped = resolve;
+      }),
+  );
+  mocks.writeTags.mockResolvedValue({ success: true, data: [] });
+  const writing = player.saveTrackTags([{ path: "C:/class.wav", title: "新版标题" }]);
+  await player.stop();
+  const { schoolState } = await import("@/stores/school");
+  schoolState.value = {
+    ...schoolState.value,
+    generation: schoolState.value.generation + 1,
+    phase: "BREAK",
+    endAt: Date.now() + 60000,
+    config: { ...schoolState.value.config, enabled: true, scheduleEnabled: true },
+  };
+  stopped({ success: true });
+  await writing;
+  expect(mocks.writeTags).toHaveBeenCalled();
   expect(mocks.load).not.toHaveBeenCalled();
   expect(mocks.play).not.toHaveBeenCalled();
 });
