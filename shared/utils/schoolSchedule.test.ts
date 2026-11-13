@@ -105,7 +105,7 @@ describe("schoolSchedule", () => {
   it("系统时间前后跳变均由绝对时间重算", () => {
     const value = config();
     const duringBreak = at("2026-11-16", "09:45");
-    assert.equal(evaluateSchoolSchedule(value, duringBreak + 3 * 86_400_000).phase, "CLASS");
-    assert.equal(evaluateSchoolSchedule(value, duringBreak - 3 * 86_400_000).phase, "CLASS");
+    assert.equal(evaluateSchoolSchedule(value, duringBreak + 5 * 86_400_000).phase, "CLASS");
+    assert.equal(evaluateSchoolSchedule(value, duringBreak - 1 * 86_400_000).phase, "CLASS");
   });
 });
