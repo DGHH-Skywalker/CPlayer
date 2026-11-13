@@ -14,7 +14,7 @@ interface Evaluation {
   result: { value: unknown };
 }
 import assert from "node:assert/strict";
-import { readdir, stat } from "node:fs/promises";
+import { readdir, stat, open, readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import { setTimeout as delay } from "node:timers/promises";
@@ -117,8 +117,9 @@ for (const resource of [
   assert.ok((await stat(resolve("dist/win-unpacked/resources", resource))).size > 0);
 }
 
+const logFile = await open("dist/portable-smoke.log", "w");
 const appProcess = spawn(resolve("dist", portable), ["--remote-debugging-port=9333"], {
-  stdio: "ignore",
+  stdio: ["ignore", logFile.fd, logFile.fd],
 });
 let client: DebugClient | undefined;
 try {
@@ -169,8 +170,13 @@ try {
     }),
   );
   await evaluate(client, "window.api.window.quit()").catch(() => {});
+} catch (error) {
+  await logFile.sync();
+  console.error((await readFile("dist/portable-smoke.log", "utf8")).slice(-10000));
+  throw error;
 } finally {
   client?.socket.close();
   if (appProcess.pid)
     spawnSync("taskkill", ["/PID", String(appProcess.pid), "/T", "/F"], { stdio: "ignore" });
+  await logFile.close();
 }
