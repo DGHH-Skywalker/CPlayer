@@ -74,9 +74,7 @@ export const setSchoolConfig = async (config: SchoolConfig): Promise<SchoolState
 };
 
 export const setBilibiliConfig = async (config: BilibiliConfig): Promise<BilibiliConfig> => {
-  const result = await requireStore().setBilibili(config);
-  if (!config.allowSimultaneousPlayback && config.pauseMusicOnMv) return result;
-  return result;
+  return requireStore().setBilibili(config);
 };
 
 export const exportSchoolSchedule = (): string => requireStore().exportSchool();
