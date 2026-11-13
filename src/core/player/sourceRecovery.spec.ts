@@ -296,3 +296,33 @@ it("校园切换后迟到的历史恢复不能在下一课间重新加载旧歌�
   expect(mocks.play).not.toHaveBeenCalled();
   expect(status.state).toBe("stopped");
 });
+
+it("上课后的迟到状态与曲尾事件不能恢复播放状态或触发下一首", async () => {
+  const { schoolState } = await import("@/stores/school");
+  schoolState.value = {
+    ...schoolState.value,
+    phase: "CLASS",
+    pendingClear: "class",
+    config: { ...schoolState.value.config, enabled: true, scheduleEnabled: true },
+  };
+  status.state = "stopped";
+  status.position = 0;
+  status.duration = 0;
+  await events.handleEvent({
+    type: "status",
+    data: {
+      state: "playing",
+      position: 1000,
+      duration: 180000,
+      volume: 1,
+      speed: 1,
+      isFinished: false,
+    },
+  });
+  await events.handleEvent({ type: "ended" });
+  expect(status.state).toBe("stopped");
+  expect(status.position).toBe(0);
+  expect(status.duration).toBe(0);
+  expect(mocks.load).not.toHaveBeenCalled();
+  expect(mocks.play).not.toHaveBeenCalled();
+});

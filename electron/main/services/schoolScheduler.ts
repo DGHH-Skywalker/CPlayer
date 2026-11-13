@@ -53,7 +53,10 @@ export class SchoolScheduler {
 
   /** 开始边界计时与低频补偿检查 */
   start(): void {
-    this.checkTimer = setInterval(() => this.tick(), 15_000);
+    this.checkTimer = setInterval(() => {
+      this.tick();
+      if (this.snapshot.pendingClear) this.hooks.publish(this.snapshot);
+    }, 15_000);
     this.tick();
   }
 
@@ -107,6 +110,11 @@ export class SchoolScheduler {
 
   /** 在原生音频启动前读取权限，包含绝对边界检查 */
   allowsPlayback(): boolean {
+    if (
+      !this.snapshot.pendingClear &&
+      (!this.snapshot.config.enabled || !this.snapshot.config.scheduleEnabled)
+    )
+      return true;
     const s = this.get();
     return (
       !s.pendingClear && (!s.config.enabled || !s.config.scheduleEnabled || s.phase === "BREAK")

@@ -140,6 +140,18 @@ describe("校园绝对时间调度与停止屏障", () => {
     expect(scheduler.allowsPlayback()).toBe(false);
     expect(scheduler.get().pendingClear).not.toBeNull();
   });
+  it("清理未确认时低频重投同一事件，不重复停止或丢失命令", () => {
+    const publish = vi.fn();
+    scheduler = new SchoolScheduler(config(), { now: Date.now, stop, publish, persist: vi.fn() });
+    scheduler.start();
+    const id = scheduler.get().pendingClear;
+    publish.mockClear();
+    stop.mockClear();
+    vi.advanceTimersByTime(15000);
+    expect(publish).toHaveBeenCalledOnce();
+    expect(scheduler.get().pendingClear).toBe(id);
+    expect(stop).not.toHaveBeenCalled();
+  });
   it("释放所有计时器", () => {
     start();
     scheduler.dispose();

@@ -1,3 +1,4 @@
+import { isSchoolMode, canRequestNow } from "@/stores/school";
 import { queueEntries } from "@/stores/queue";
 import type { PlayerEvent } from "@shared/types/player";
 import i18n from "@/i18n";
@@ -65,6 +66,19 @@ const finishCurrentTrack = async (): Promise<void> => {
  * @param event - 播放事件
  */
 export const handleEvent = async (event: PlayerEvent): Promise<void> => {
+  if (
+    isSchoolMode() &&
+    !canRequestNow() &&
+    ![
+      "getQueue",
+      "deviceChanged",
+      "outputFallback",
+      "setShuffle",
+      "setRepeat",
+      "toggleLike",
+    ].includes(event.type)
+  )
+    return;
   const status = useStatusStore();
   switch (event.type) {
     case "status":
