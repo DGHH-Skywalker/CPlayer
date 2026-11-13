@@ -1,4 +1,4 @@
-; 使用原生向导控件，安装和卸载共用品牌图与字体
+; 使用原生向导控件，安装和卸载共用布局与字体
 ManifestDPIAware true
 SetFont /LANG=2052 "Microsoft YaHei UI" 9
 SetFont /LANG=1033 "Segoe UI" 9

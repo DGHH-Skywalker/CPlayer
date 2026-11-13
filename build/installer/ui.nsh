@@ -63,8 +63,11 @@ Var SPlayerHeaderBitmap
 
   Function ${PREFIX}SPlayerGuiInit
     InitPluginsDir
-    File /oname=$PLUGINSDIR\splayer-header.bmp "${MUI_HEADERIMAGE_BITMAP}"
-    !insertmacro SPlayerSetBitmap "${PREFIX}" $mui.Header.Image "$PLUGINSDIR\splayer-header.bmp" $SPlayerHeaderBitmap
+    ; 默认向导未提供自定义头图时保留原生布局
+    !ifdef MUI_HEADERIMAGE_BITMAP
+      File /oname=$PLUGINSDIR\splayer-header.bmp "${MUI_HEADERIMAGE_BITMAP}"
+      !insertmacro SPlayerSetBitmap "${PREFIX}" $mui.Header.Image "$PLUGINSDIR\splayer-header.bmp" $SPlayerHeaderBitmap
+    !endif
     System::Store "S"
     GetDlgItem $0 $HWNDPARENT 1
     GetDlgItem $1 $HWNDPARENT 2
