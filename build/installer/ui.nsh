@@ -63,6 +63,7 @@ Var SPlayerHeaderBitmap
 
   Function ${PREFIX}SPlayerGuiInit
     InitPluginsDir
+    StrCpy $SPlayerHeaderBitmap 0
     ; 默认向导未提供自定义头图时保留原生布局
     !ifdef MUI_HEADERIMAGE_BITMAP
       File /oname=$PLUGINSDIR\splayer-header.bmp "${MUI_HEADERIMAGE_BITMAP}"
