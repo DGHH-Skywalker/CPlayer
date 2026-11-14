@@ -15,7 +15,8 @@ export const biliSongBootstrap = (song: BilibiliSongPage | null): string => Stri
   const song = ${JSON.stringify(song)};
   if (!song) return;
   const expected = new URL(song.url);
-  if (location.pathname.replace(/\/$/, '') !== expected.pathname.replace(/\/$/, '') || (new URLSearchParams(location.search).get('p') || '1') !== (expected.searchParams.get('p') || '1')) return;
+  const path = url => url.pathname.replace(/^\/en\//, '/').replace(/\/$/, '');
+  if (path(location) !== path(expected) || (new URLSearchParams(location.search).get('p') || '1') !== (expected.searchParams.get('p') || '1')) return;
   let finished = false, started = false, pausedByUser = !song.autoPlay;
   let lastTime = 0;
   const emit = (state, video) => {
@@ -32,7 +33,7 @@ export const biliSongBootstrap = (song: BilibiliSongPage | null): string => Stri
     history[method] = function(data, unused, url) {
       if (url) {
         const target = new URL(url, location.href);
-        if (finished || target.pathname.replace(/\/$/, '') !== expected.pathname.replace(/\/$/, '') || (target.searchParams.get('p') || '1') !== (expected.searchParams.get('p') || '1')) return;
+        if (finished || path(target) !== path(expected) || (target.searchParams.get('p') || '1') !== (expected.searchParams.get('p') || '1')) return;
       }
       return original.apply(this, arguments);
     };

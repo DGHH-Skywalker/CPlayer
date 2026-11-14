@@ -39,7 +39,15 @@ const run = async (): Promise<void> => {
   const { url } = parseBilibiliSong(
     process.env.BILIBILI_TEST_URL ?? "https://www.bilibili.com/video/BV1Y6We6jEPQ/",
   );
-  await wc.loadURL(url);
+  try {
+    await wc.loadURL(url);
+  } catch (error) {
+    if (
+      (error as { code?: string }).code !== "ERR_ABORTED" ||
+      parseBilibiliSong(wc.getURL()).id !== parseBilibiliSong(url).id
+    )
+      throw error;
+  }
   for (let attempt = 0; attempt < 60; attempt++) {
     const decoded = await wc.executeJavaScript(
       "[...document.querySelectorAll('video')].some(v => v.readyState >= 2 && v.videoWidth > 0)",

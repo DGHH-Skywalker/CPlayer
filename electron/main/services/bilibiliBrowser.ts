@@ -13,7 +13,7 @@ import { MvAudioCoordinator } from "./mvAudioCoordinator";
 import type { BilibiliState } from "@shared/types/bilibili";
 import type { BilibiliSongEvent } from "@shared/types/bilibili";
 import type { Track } from "@shared/types/player";
-import { createBilibiliSong } from "@shared/bilibiliSong";
+import { createBilibiliSong, parseBilibiliSong } from "@shared/bilibiliSong";
 import { biliSongTransport } from "./bilibiliSongTransport";
 import { stopPlaybackCompletely } from "@main/ipc/player";
 import * as nowPlaying from "./nowPlaying";
@@ -162,7 +162,16 @@ export const playBilibiliSong = async (
   });
   if (biliSongTransport.current?.token !== token || !schoolAllowsPlayback()) return;
   view!.webContents.setAudioMuted(false);
-  await view!.webContents.loadURL(song.bilibili!.url);
+  try {
+    await view!.webContents.loadURL(song.bilibili!.url);
+  } catch (error) {
+    if (
+      (error as { code?: string }).code !== "ERR_ABORTED" ||
+      !view ||
+      parseBilibiliSong(view.webContents.getURL()).id !== song.id
+    )
+      throw error;
+  }
   if (songWantsPlay && biliSongTransport.current?.token === token)
     await controlBilibiliSong("play", token);
 };

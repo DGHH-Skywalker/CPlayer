@@ -63,6 +63,9 @@ describe("哔哩Song 网页队列", () => {
   it("规范化分 P 并去除跟踪参数", () => {
     expect(track.id).toBe("bilibili:BV1wHWe68Eh3:p2");
     expect(track.bilibili?.url).toBe("https://www.bilibili.com/video/BV1wHWe68Eh3/?p=2");
+    expect(parseBilibiliSong("https://www.bilibili.com/en/video/BV1wHWe68Eh3/?p=2").id).toBe(
+      track.id,
+    );
     for (const url of [
       "https://bilibili.com.evil/video/BV1wHWe68Eh3/",
       "https://www.bilibili.com@evil.test/video/BV1wHWe68Eh3/",

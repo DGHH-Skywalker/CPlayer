@@ -7,7 +7,7 @@ import type { Track } from "./types/player";
  */
 export const parseBilibiliSong = (input: string): { url: string; id: string } => {
   const url = new URL(input);
-  const match = /^\/video\/(BV[a-zA-Z0-9]{10}|av\d+)\/?$/.exec(url.pathname);
+  const match = /^\/(?:en\/)?video\/(BV[a-zA-Z0-9]{10}|av\d+)\/?$/.exec(url.pathname);
   if (
     url.protocol !== "https:" ||
     !["www.bilibili.com", "m.bilibili.com", "bilibili.com"].includes(url.hostname) ||
