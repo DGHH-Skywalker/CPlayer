@@ -307,6 +307,15 @@ const create = async (): Promise<void> => {
     });
     wc.on("will-navigate", (event, url) => {
       if (biliSongTransport.current) {
+        try {
+          if (
+            biliSongTransport.current.state === "loading" &&
+            parseBilibiliSong(url).id === biliSongTransport.current.trackId
+          )
+            return;
+        } catch {
+          /* 非视频地址保持拦截 */
+        }
         event.preventDefault();
         error = "哔哩Song 播放中，请通过应用队列切歌";
         publish();
@@ -319,6 +328,20 @@ const create = async (): Promise<void> => {
       }
     });
     wc.on("will-redirect", (event, url, _inPlace, isMainFrame) => {
+      if (isMainFrame && biliSongTransport.current) {
+        let same = false;
+        try {
+          same =
+            biliSongTransport.current.state === "loading" &&
+            parseBilibiliSong(url).id === biliSongTransport.current.trackId;
+        } catch {
+          /* 非视频地址保持拦截 */
+        }
+        if (!same) {
+          event.preventDefault();
+          return;
+        }
+      }
       if (isMainFrame && !isBilibiliUrl(url)) {
         event.preventDefault();
         error = "已阻止外部重定向";
