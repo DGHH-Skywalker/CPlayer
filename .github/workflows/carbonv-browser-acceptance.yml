@@ -1,0 +1,45 @@
+name: Cplayer Windows browser acceptance
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  live-browser:
+    name: Windows Bilibili ${{ matrix.mode }}
+    runs-on: windows-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [enhanced, no-login-off, core-off]
+    env:
+      CI: true
+      CPLAYER_CORE_ENABLED: ${{ matrix.mode == 'core-off' && 'false' || 'true' }}
+      CPLAYER_NO_LOGIN: ${{ matrix.mode == 'enhanced' && 'true' || 'false' }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24.22.1
+          cache: pnpm
+      - name: Use official Electron download
+        shell: bash
+        run: rm -f .npmrc
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Decode real public video in fresh anonymous session
+        shell: bash
+        run: pnpm test:bilibili-live 2>&1 | tee live-browser.log
+      - name: Preserve website results and screenshot
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: Cplayer-Windows-browser-${{ matrix.mode }}-${{ github.sha }}
+          retention-days: 30
+          path: |
+            test-results/
+            live-browser.log
