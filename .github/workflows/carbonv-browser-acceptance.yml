@@ -1,6 +1,8 @@
 name: Cplayer Windows browser acceptance
 
 on:
+  push:
+    branches: ["test/bilibili-windows-acceptance"]
   workflow_dispatch:
 
 permissions:
