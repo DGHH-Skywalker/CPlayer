@@ -50,6 +50,11 @@ jobs:
         run: pnpm test
       - name: Electron browser isolation and early injection
         run: pnpm test:electron
+      - name: Electron native view at 125 and 150 percent DPI
+        shell: bash
+        run: |
+          CPLAYER_TEST_DPI=1.25 pnpm test:electron
+          CPLAYER_TEST_DPI=1.5 pnpm test:electron
       - name: Build native modules and Windows packages
         id: package
         run: pnpm build:win --x64 --publish never
@@ -66,5 +71,6 @@ jobs:
             dist/*-setup.exe
             dist/*-portable.exe
             dist/portable-smoke.log
+            dist/acceptance-result.json
             docs/testing.md
             vendor/bilikit/manifest.json

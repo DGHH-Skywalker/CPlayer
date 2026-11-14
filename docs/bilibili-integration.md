@@ -32,4 +32,4 @@ Core 开始前仅修改 bilikit:settings 中 module.no-login.enabled，并合并
 
 免登录模块使用上游官方试看接口，无法保证所有视频 1080P 或会员画质。真实登录/退出、B 站实时搜索、弹幕、评论、SPA 页面和接口可用性需要网络环境及用户实际账号验证。自动化 fixture 只能证明 Electron 注入时机和会话隔离，不能替代这些站点验收。Core 关闭后原生网页功能保留。
 
-浏览器使用保留 Chromium 版本的标准桌面 User-Agent，移除应用和 Electron 产品标识。当前环境已实测关闭 Core 时匿名公开视频解码播放；开启 Core 时提前注入和接口请求通过，但所测视频未输出解码帧，1080P 增强尚未通过站点验收。可在控制中心关闭 Core 后使用原生网页，具体记录与复现步骤见 testing.md。
+浏览器使用保留 Chromium 版本的标准桌面 User-Agent，移除应用和 Electron 产品标识。2026-11-14 延长冷启动网络等待后，匿名公开视频在 Core 与 no-login 均开启时已实际解码至 1920×1080、readyState=4、进度超过 8 秒，具体证据见 testing.md。早期注入等待文档根节点创建，但仍在首个页面脚本前运行，避免主题模块访问空 documentElement。真实账号仍需由用户在受控 Windows 测试机内自行登录验收。

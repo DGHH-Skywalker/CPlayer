@@ -1,4 +1,5 @@
 import { markPlaybackActivity } from "./playbackActivity";
+import { biliSongTransport } from "./bilibiliSongTransport";
 import { assertSchoolPlayback } from "./schoolPlaybackGate";
 import { loadNativeModule } from "@main/utils/nativeLoader";
 import { getCoverCacheDir, isDev } from "@main/utils/config";
@@ -74,6 +75,7 @@ export const getPlayer = (): PlayerInstance => {
           if (starts.has(String(key))) {
             try {
               assertSchoolPlayback();
+              if (biliSongTransport.current) throw new Error("哔哩Song 正在播放，请先切换队列项");
             } catch (error) {
               return Promise.reject(error);
             }

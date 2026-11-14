@@ -224,6 +224,10 @@ export const scheduleNextTrackPreload = (): void => {
   }
   if (status.trackLoading || status.state === "loading") return;
   const currentTrack = status.currentTrack;
+  if (currentTrack?.source === "bilibili") {
+    invalidateNextTrackPreload();
+    return;
+  }
   if (!currentTrack || useMediaStore().track?.id !== currentTrack.id) {
     invalidateNextTrackPreload();
     return;
@@ -243,6 +247,10 @@ export const scheduleNextTrackPreload = (): void => {
   }
 
   const candidateTrack = candidateResult.track;
+  if (candidateTrack.source === "bilibili") {
+    invalidateNextTrackPreload();
+    return;
+  }
   if (
     candidateTrack.source !== "local" &&
     (!settings.system.cache.songCache.enabled || !settings.system.cache.songCache.cacheStreaming)

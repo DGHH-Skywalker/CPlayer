@@ -10,6 +10,7 @@ import {
 import { extname } from "node:path";
 import { app, ipcMain, powerMonitor } from "electron";
 import { sendToMain } from "@main/utils/broadcast";
+import { biliSongTransport } from "@main/services/bilibiliSongTransport";
 import { readFileAutoEncoding } from "@main/utils/encoding";
 import { wsBroadcast } from "@main/server/broadcast";
 import { toCacheUrl } from "@main/utils/protocol";
@@ -135,6 +136,19 @@ const classifyLoadError = (error: unknown, source: string): ErrorCode => {
  */
 const registerNativeEvents = (inst: InstanceType<AudioEngineModule["AudioPlayer"]>): void => {
   inst.onEvent((event: JsPlayerEvent) => {
+    if (
+      biliSongTransport.current &&
+      [
+        "stateChanged",
+        "position",
+        "ended",
+        "sourceError",
+        "transitionReady",
+        "transitionChanged",
+        "fftData",
+      ].includes(event.type)
+    )
+      return;
     switch (event.type) {
       case "stateChanged": {
         const state = (event.state ?? "idle") as PlayerState;
@@ -401,6 +415,7 @@ const completeTrackLoad = (
 
 /** 完整停止：作废加载、预载、设备重建并释放原生音频 */
 export const stopPlaybackCompletely = () => {
+  if (biliSongTransport.current) void biliSongTransport.control?.("stop");
   loadSeq++;
   cancelPendingReinit();
   activeCueRange = null;
@@ -728,6 +743,10 @@ export const registerPlayerIpc = (): void => {
   // 恢复播放
   ipcMain.handle("player:play", async () => {
     try {
+      if (biliSongTransport.current) {
+        await biliSongTransport.control?.("play");
+        return { success: true };
+      }
       await getPlayer().play();
       return { success: true };
     } catch (error) {
@@ -738,6 +757,10 @@ export const registerPlayerIpc = (): void => {
   // 暂停播放
   ipcMain.handle("player:pause", () => {
     try {
+      if (biliSongTransport.current) {
+        void biliSongTransport.control?.("pause");
+        return { success: true };
+      }
       getPlayer().pause();
       return { success: true };
     } catch (error) {
@@ -752,6 +775,10 @@ export const registerPlayerIpc = (): void => {
 
   // 跳转到指定播放位置
   ipcMain.handle("player:seek", async (_event, positionMs: number, restartRound = false) => {
+    if (biliSongTransport.current) {
+      await biliSongTransport.control?.("seek", positionMs);
+      return { success: true };
+    }
     const seq = ++loadSeq;
     try {
       /** 重播时先装配轮次，原生 seek 的播放事件才能启动新的计时 */
@@ -1059,12 +1086,24 @@ export const registerPlayerIpc = (): void => {
       const inst = getPlayer();
       switch (event.type) {
         case "Play":
+          if (biliSongTransport.current) {
+            void biliSongTransport.control?.("play");
+            break;
+          }
           void inst.play().catch(() => {});
           break;
         case "Pause":
+          if (biliSongTransport.current) {
+            void biliSongTransport.control?.("pause");
+            break;
+          }
           inst.pause();
           break;
         case "Stop":
+          if (biliSongTransport.current) {
+            void biliSongTransport.control?.("stop");
+            break;
+          }
           loadSeq++;
           void streamingPlayback.stopStreamingPlayback();
           cancelPreparedTrack();
@@ -1072,6 +1111,10 @@ export const registerPlayerIpc = (): void => {
           inst.stop();
           break;
         case "Seek":
+          if (biliSongTransport.current) {
+            void biliSongTransport.control?.("seek", event.positionMs);
+            break;
+          }
           if (event.positionMs != null) {
             const seq = ++loadSeq;
             const targetMs = event.positionMs;

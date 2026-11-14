@@ -32,3 +32,4 @@ package-lock.json
 *.p12
 
 .electron-browser-test.cjs
+test-results/

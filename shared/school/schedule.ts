@@ -12,6 +12,7 @@ export const defaultSchoolConfig: SchoolConfig = {
     enabled: true,
     coreEnabled: true,
     noLogin: true,
+    biliSongEnabled: false,
     retainLogin: true,
     pauseOnClass: true,
     audioPolicy: "pause-music",
@@ -125,6 +126,8 @@ export const validateSchoolConfig = (config: SchoolConfig): SchoolConfig => {
   for (const key of ["enabled", "coreEnabled", "noLogin", "retainLogin", "pauseOnClass"] as const) {
     if (typeof config.bilibili[key] !== "boolean") throw new Error("浏览器开关无效");
   }
+  if (config.bilibili.biliSongEnabled === undefined) config.bilibili.biliSongEnabled = false;
+  if (typeof config.bilibili.biliSongEnabled !== "boolean") throw new Error("哔哩Song 开关无效");
   // 取完整周及特殊日期前后一天，检测周日到周一和例外覆盖后的冲突
   const starts = [
     { date: "2026-01-04", weeklyOnly: true },

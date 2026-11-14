@@ -52,7 +52,8 @@
     "docs:build": "vitepress build docs",
     "docs:preview": "vitepress preview docs",
     "prepare": "husky",
-    "test:electron": "node scripts/run-electron-smoke.mjs"
+    "test:electron": "node scripts/run-electron-smoke.mjs",
+    "test:bilibili-live": "node scripts/run-electron-smoke.mjs --live"
   },
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.2",

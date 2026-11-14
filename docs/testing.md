@@ -1,5 +1,15 @@
 # 验证记录
 
+## 2026-11-14 继续验收与哔哩Song
+
+本轮新增默认关闭的哔哩Song，具体入口和行为见 bilibili-song.md。自动测试覆盖规范 URL、分 P 标识、重复结束、队尾停止、课间截止、旧页面状态、取消尚未开始的 MV；真实 Chromium 使用受控媒体自然结束验证站点续播和分 P 跳转被阻止。Core 增加根节点等待后仍在首个页面脚本之前运行，修复主题模块访问空 documentElement。
+
+2026-11-14 00:38:17 UTC 执行 `pnpm test:bilibili-live`，全新内存会话、无 SESSDATA，Core 0.5.35 和 no-login 均开启，BV1Y6We6jEPQ 实际解码至 1920×1080、readyState=4、paused=false，进度 8.26835 秒。JSON 和网页截图保存在本地 test-results/bilibili-core-on.json、bilibili-core-on.png。本轮结果取代下方首次仅等待约十秒而未解码的结论；它只证明所测公开视频在当前网络环境可用，不代表所有视频均提供 1080P。
+
+Windows 工作流新增 125% / 150% Chromium DPI 与 100% / 125% / 150% 应用缩放的真实 WebContentsView 尺寸检查，修正边界裁剪。便携版验证新增实际输出端点检测：存在端点时加载测试音并检查从 playing 到 CLASS/stopped 的状态，缺少端点时在 acceptance-result.json 明确记录未完成，不能伪称实体扬声器检查通过。
+
+当前环境只有 Linux 工作区和 GitHub Windows runner，没有交互式 Windows 测试机或用户 B 站登录会话。已向用户请求可用验收入口；不会索取或代填密码、Cookie。真实睡眠/唤醒、实体扬声器和账号登录的现场结论仍须对应设备与用户会话，自动时钟与 Cookie fixture 不能替代它们。
+
 ## 环境与基线
 
 Linux，Node 24.22.1、工程指定 pnpm 12.15.0、Electron 44.10.1。原始提交 6b26b685f67cfac9d3233747b399255620f45b87 在独立 worktree 运行：Node 53/53，Web 590/590，类型检查通过。

@@ -120,6 +120,11 @@ watchDebounced(
     <SCard title="B 站与 MV" variant="settings">
       <div class="flex flex-col gap-3">
         <label class="flex justify-between">
+          哔哩Song（实验性）
+          <SSwitch v-model="draft.bilibili.biliSongEnabled" />
+        </label>
+        <p>将当前 MV 页面加入音乐播放列表，视频结束后播放队列下一首，阻止 B 站自动续播</p>
+        <label class="flex justify-between">
           启用内置 B 站浏览器
           <SSwitch v-model="draft.bilibili.enabled" />
         </label>

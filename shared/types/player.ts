@@ -14,7 +14,7 @@ export type RepeatMode = "list" | "one";
 export type ShuffleMode = "off" | "on";
 
 /** 歌曲来源：本地 / 流媒体 / 在线平台 / 插件 */
-export type TrackSource = "local" | "streaming" | "plugin" | Platform;
+export type TrackSource = "local" | "streaming" | "plugin" | "bilibili" | Platform;
 
 /** 播放来源类型 */
 export type PlaybackOriginType = "track" | "playlist" | "album" | "artist" | "radio" | "page";
@@ -98,6 +98,8 @@ export interface Track {
   mediaId?: string;
   /** 歌曲来源 */
   source: TrackSource;
+  /** 哔哩Song 仅保存规范网页地址，不保存视频流或账号信息 */
+  bilibili?: { url: string };
   /** 独立插件来源及重新取数所需的轻量曲目信息 */
   plugin?: {
     pluginId: string;

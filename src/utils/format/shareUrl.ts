@@ -8,6 +8,8 @@ import type { Collection, CollectionType } from "@/types/collection";
 export const getTrackShareUrl = (track: Track | null | undefined): string | null => {
   if (!track?.id) return null;
   switch (track.source) {
+    case "bilibili":
+      return track.bilibili?.url ?? null;
     case "netease":
       return `https://music.163.com/#/song?id=${track.id}`;
     case "qqmusic":
@@ -33,6 +35,7 @@ export const getCollectionShareUrl = (collection: Collection | null | undefined)
       kugou: `https://www.kugou.com/album/info/${collection.id}/`,
       streaming: null,
       plugin: null,
+      bilibili: null,
       local: null,
     },
     playlist: {
@@ -41,6 +44,7 @@ export const getCollectionShareUrl = (collection: Collection | null | undefined)
       kugou: `https://www.kugou.com/songlist/${collection.id}/`,
       streaming: null,
       plugin: null,
+      bilibili: null,
       local: null,
     },
     radio: {
@@ -49,6 +53,7 @@ export const getCollectionShareUrl = (collection: Collection | null | undefined)
       kugou: `https://www.kugou.com/song/#fm_id=${collection.id}`,
       streaming: null,
       plugin: null,
+      bilibili: null,
       local: null,
     },
     cloud: {
@@ -57,6 +62,7 @@ export const getCollectionShareUrl = (collection: Collection | null | undefined)
       kugou: null,
       streaming: null,
       plugin: null,
+      bilibili: null,
       local: null,
     },
   };

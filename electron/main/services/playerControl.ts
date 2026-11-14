@@ -7,6 +7,7 @@ import { stopPlaybackCompletely } from "@main/ipc/player";
  */
 
 import { randomUUID } from "node:crypto";
+import { biliSongTransport } from "./bilibiliSongTransport";
 import { getMainWindow } from "@main/window";
 import { queueQuerySchema } from "@main/services/music";
 import { getPlayer } from "@main/services/engine";
@@ -29,6 +30,8 @@ let currentIndex = -1;
  * @param positionMs - 目标位置（毫秒）
  */
 const seek = (positionMs: number): Promise<void> => {
+  if (biliSongTransport.current)
+    return biliSongTransport.control?.("seek", positionMs) ?? Promise.resolve();
   sendToMain("player:event", { type: "seek", data: { position: positionMs } });
   return getPlayer().seek(positionMs / 1000);
 };
@@ -81,21 +84,32 @@ export const playerControl = {
    */
   getStatus: (): PlaybackStatusSnapshot => {
     const status = getPlayer().getStatus();
+    const song = biliSongTransport.current;
     return {
-      state: status.state as PlayerState,
-      positionMs: toMs(status.position),
-      durationMs: toMs(status.duration),
+      state: song
+        ? song.state === "ended" || song.state === "error"
+          ? "stopped"
+          : song.state
+        : (status.state as PlayerState),
+      positionMs: song?.position ?? toMs(status.position),
+      durationMs: song?.duration ?? toMs(status.duration),
       volume: status.volume,
-      isFinished: status.isFinished,
+      isFinished: song ? song.state === "ended" : status.isFinished,
       currentIndex,
       ...getTrayPlayMode(),
     };
   },
-  play: (): void =>
-    void getPlayer()
-      .play()
-      .catch(() => {}),
-  pause: (): void => getPlayer().pause(),
+  play: (): void => {
+    if (biliSongTransport.current) void biliSongTransport.control?.("play");
+    else
+      void getPlayer()
+        .play()
+        .catch(() => {});
+  },
+  pause: (): void => {
+    if (biliSongTransport.current) void biliSongTransport.control?.("pause");
+    else getPlayer().pause();
+  },
   stop: (): void => {
     stopPlaybackCompletely();
   },

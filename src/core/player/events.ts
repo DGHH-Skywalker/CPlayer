@@ -1,5 +1,6 @@
 import { isSchoolMode, canRequestNow } from "@/stores/school";
 import { queueEntries } from "@/stores/queue";
+import { isBilibiliSongActive } from "@/services/bilibiliSong";
 import type { PlayerEvent } from "@shared/types/player";
 import i18n from "@/i18n";
 import { toast } from "@/composables/useToast";
@@ -66,6 +67,19 @@ const finishCurrentTrack = async (): Promise<void> => {
  * @param event - 播放事件
  */
 export const handleEvent = async (event: PlayerEvent): Promise<void> => {
+  if (
+    isBilibiliSongActive() &&
+    [
+      "status",
+      "position",
+      "ended",
+      "sourceError",
+      "transition",
+      "transitionReady",
+      "fftData",
+    ].includes(event.type)
+  )
+    return;
   if (
     isSchoolMode() &&
     !canRequestNow() &&

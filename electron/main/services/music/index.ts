@@ -3,12 +3,14 @@ import { searchTracks } from "@main/database";
 import type { Track } from "@shared/types/player";
 import type { OnlineSearchOptions, OnlineSearchResult } from "@shared/types/music";
 import { searchOnlineTracks } from "./onlineSearch";
+import { parseBilibiliSong } from "@shared/bilibiliSong";
 
 /** 校验播放必需字段，保留路径、平台附加 ID 等 Track 信息 */
 export const trackSchema = z
   .looseObject({
     id: z.string().min(1),
-    source: z.enum(["local", "streaming", "plugin", "netease", "qqmusic", "kugou"]),
+    source: z.enum(["local", "streaming", "plugin", "bilibili", "netease", "qqmusic", "kugou"]),
+    bilibili: z.object({ url: z.string() }).optional(),
     plugin: z
       .object({
         pluginId: z.string().min(1),
@@ -23,7 +25,18 @@ export const trackSchema = z
   .refine((track) => track.source !== "plugin" || track.plugin !== undefined, {
     message: "Plugin tracks require their source metadata",
     path: ["plugin"],
-  }) satisfies z.ZodType<Track>;
+  })
+  .refine(
+    (track) => {
+      if (track.source !== "bilibili") return true;
+      try {
+        return parseBilibiliSong(track.bilibili?.url ?? "").id === track.id;
+      } catch {
+        return false;
+      }
+    },
+    { message: "哔哩Song 必须包含有效视频页面", path: ["bilibili"] },
+  ) satisfies z.ZodType<Track>;
 
 export const queueQuerySchema = z.strictObject({
   offset: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).default(0),

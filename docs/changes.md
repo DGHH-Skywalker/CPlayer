@@ -1,5 +1,14 @@
 # Cplayer 修改记录
 
+## 2026-11-14 哔哩Song 与继续验收
+
+- 新增 `shared/bilibiliSong.ts`、`bilibiliSongPage.ts`、`bilibiliSongTransport.ts`、`src/services/bilibiliSong.ts` 和测试，实现默认关闭的网页曲目实验功能
+- 扩展 Track、浏览器 IPC/preload、播放器、预加载器、外部控制与控制中心；网页结束交接到现有队列，主进程静音及代次检查优先于自动恢复
+- Core 在文档根节点出现时提前执行，修复 document-start 访问空 documentElement；受控首个脚本前注入检查通过
+- `test-bilibili-live.ts` 提供真实匿名网站验收，已记录 Core + no-login 开启时 1920×1080 解码及进度
+- 原生视图边界裁剪到窗口剩余区域，Windows Actions 增加 125% / 150% DPI 和实际便携版音频端点检查，单独保存 acceptance-result.json
+- 新增使用与实现说明 `docs/bilibili-song.md`
+
 ## Phase 0
 
 记录用户 Fork 的实际提交与规范，建立 feat/carbonv-school。独立原始 worktree 验证 53 项 Node / 590 项 Web 测试及类型检查。固定 Core 来源及许可。

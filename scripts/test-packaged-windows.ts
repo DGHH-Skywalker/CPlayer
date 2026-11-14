@@ -14,7 +14,7 @@ interface Evaluation {
   result: { value: unknown };
 }
 import assert from "node:assert/strict";
-import { readdir, stat, open, readFile } from "node:fs/promises";
+import { readdir, stat, open, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import { setTimeout as delay } from "node:timers/promises";
@@ -122,6 +122,10 @@ const appProcess = spawn(resolve("dist", portable), ["--remote-debugging-port=93
   stdio: ["ignore", logFile.fd, logFile.fd],
 });
 let client: DebugClient | undefined;
+let nativeAudio: { verified: boolean; reason?: string } = {
+  verified: false,
+  reason: "尚未检查输出设备",
+};
 try {
   const page = await waitForPage();
   client = await connect(page.webSocketDebuggerUrl);
@@ -136,6 +140,46 @@ try {
   }
   assert.ok(snapshot, "预加载校园 API 不可用");
   assert.equal(snapshot.config.enabled, false);
+  const devices = await evaluate<{ success: boolean; data?: unknown[] }>(
+    client,
+    "window.api.player.getOutputDevices()",
+  );
+  if (devices.success && devices.data?.length) {
+    const frames = 44100 * 10;
+    const tone = Buffer.alloc(44 + frames * 2);
+    tone.write("RIFF");
+    tone.writeUInt32LE(tone.length - 8, 4);
+    tone.write("WAVEfmt ", 8);
+    tone.writeUInt32LE(16, 16);
+    tone.writeUInt16LE(1, 20);
+    tone.writeUInt16LE(1, 22);
+    tone.writeUInt32LE(44100, 24);
+    tone.writeUInt32LE(88200, 28);
+    tone.writeUInt16LE(2, 32);
+    tone.writeUInt16LE(16, 34);
+    tone.write("data", 36);
+    tone.writeUInt32LE(frames * 2, 40);
+    for (let frame = 0; frame < frames; frame++)
+      tone.writeInt16LE(
+        Math.round(Math.sin((frame * 2 * Math.PI * 440) / 44100) * 3000),
+        44 + frame * 2,
+      );
+    const tonePath = resolve("dist/cutoff-tone.wav");
+    await writeFile(tonePath, tone);
+    const loaded = await evaluate<{ success: boolean; error?: string }>(
+      client,
+      `window.api.player.load(${JSON.stringify(tonePath)}, {autoPlay:true})`,
+    );
+    nativeAudio = { verified: loaded.success, reason: loaded.error };
+    if (loaded.success) {
+      await delay(300);
+      const playing = await evaluate<{ data: { state: string } }>(
+        client,
+        "window.api.player.getStatus()",
+      );
+      assert.equal(playing.data.state, "playing");
+    }
+  } else nativeAudio.reason = "Windows runner 未提供音频输出端点，不能替代实体扬声器验收";
   const locked = await evaluate<{ state: SchoolSnapshot; playback: { success: boolean } }>(
     client,
     `(async () => {
@@ -148,6 +192,12 @@ try {
   );
   assert.equal(locked.state.phase, "CLASS");
   assert.equal(locked.playback.success, false);
+  const stopped = await evaluate<{ data: { state: string; position: number } }>(
+    client,
+    "window.api.player.getStatus()",
+  );
+  assert.equal(stopped.data.state, "stopped");
+  assert.equal(stopped.data.position, 0);
   const browser = await evaluate<BilibiliState>(client, "window.api.bilibili.command('show')");
   assert.equal(browser.coreVersion, "0.5.35");
   await evaluate(client, "window.api.bilibili.command('hide')");
@@ -159,16 +209,17 @@ try {
   })()`,
   );
   assert.equal(disabled.phase, "DISABLED");
-  console.log(
-    JSON.stringify({
-      success: true,
-      portable,
-      renderer: page.url,
-      packagedPreload: true,
-      classGate: true,
-      packagedCore: browser.coreVersion,
-    }),
-  );
+  const verdict = JSON.stringify({
+    success: true,
+    portable,
+    renderer: page.url,
+    packagedPreload: true,
+    classGate: true,
+    packagedCore: browser.coreVersion,
+    nativeAudio,
+  });
+  console.log(verdict);
+  await writeFile("dist/acceptance-result.json", verdict + "\n");
   await evaluate(client, "window.api.window.quit()").catch(() => {});
 } catch (error) {
   await logFile.sync();

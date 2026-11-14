@@ -7,10 +7,17 @@ import { getPlayer } from "./engine";
 import { getPlaybackActivity } from "./playbackActivity";
 import { getSchoolScheduler, schoolEvents } from "./school";
 import { schoolAllowsPlayback } from "./schoolPlaybackGate";
-import { isBilibiliUrl } from "./bilibiliPolicy";
+import { isBilibiliUrl, bilibiliBounds } from "./bilibiliPolicy";
 import { BilikitLoader } from "./bilikitLoader";
 import { MvAudioCoordinator } from "./mvAudioCoordinator";
 import type { BilibiliState } from "@shared/types/bilibili";
+import type { BilibiliSongEvent } from "@shared/types/bilibili";
+import type { Track } from "@shared/types/player";
+import { createBilibiliSong } from "@shared/bilibiliSong";
+import { biliSongTransport } from "./bilibiliSongTransport";
+import { stopPlaybackCompletely } from "@main/ipc/player";
+import * as nowPlaying from "./nowPlaying";
+import * as mediaService from "./media";
 
 export const BILIBILI_PARTITION = "persist:splayer-bilibili";
 let view: WebContentsView | null = null;
@@ -27,6 +34,9 @@ let removeWindowListeners: (() => void) | null = null;
 let visibilityGeneration = 0;
 let error: string | null = null;
 let mediaPlaying = false;
+let songGeneration = -1;
+let songRequest: string | null = null;
+let songWantsPlay = false;
 
 const coordinator = new MvAudioCoordinator({
   isPlaying: () => getPlayer().getStatus().state === "playing",
@@ -57,6 +67,147 @@ export const getBilibiliState = (): BilibiliState => ({
 
 /** 将非敏感浏览器状态发给主窗口 */
 const publish = (): void => sendToMain("bilibili:state", getBilibiliState());
+
+/**
+ * 接收当前队列项的有限媒体状态，拒绝旧文档、重复结束和上课后的回调
+ * @param input - 非特权页面报告
+ */
+const reportSong = (input: unknown): void => {
+  const active = biliSongTransport.current;
+  if (!active || !input || typeof input !== "object") return;
+  const event = input as BilibiliSongEvent;
+  if (
+    event.token !== active.token ||
+    active.state === "ended" ||
+    active.state === "stopped" ||
+    !["playing", "paused", "ended", "error"].includes(event.state) ||
+    !Number.isFinite(event.position) ||
+    !Number.isFinite(event.duration)
+  )
+    return;
+  if (!schoolAllowsPlayback() || songGeneration !== getSchoolScheduler().get().generation) {
+    void controlBilibiliSong("stop", active.token);
+    return;
+  }
+  const next = {
+    ...active,
+    state: event.state,
+    position: Math.max(0, event.position),
+    duration: Math.max(0, event.duration),
+  };
+  biliSongTransport.current = next;
+  if (event.state === "ended" || event.state === "error") {
+    view?.webContents.setAudioMuted(true);
+  }
+  sendToMain("bilibili:song", next);
+  nowPlaying.onPlayStateChange(event.state === "playing" ? "playing" : "paused");
+  nowPlaying.onPosition(next.position, event.state === "playing");
+  mediaService.setPlayState({ status: event.state === "playing" ? "Playing" : "Paused" });
+  mediaService.setTimeline({ currentMs: next.position, totalMs: next.duration });
+};
+
+/** 读取当前页面作为特殊曲目，只接受规范视频页 */
+export const currentBilibiliSong = (): Track => {
+  if (!store.get("school.bilibili.biliSongEnabled")) throw new Error("请先启用实验性哔哩Song");
+  if (!view) throw new Error("请先打开 B 站视频页");
+  return createBilibiliSong(view.webContents.getURL(), view.webContents.getTitle());
+};
+
+/**
+ * 以独立操作标识播放一个网页队列项
+ * @param track - 轻量网页曲目
+ * @param token - 前端播放代次
+ * @param autoPlay - 是否自动开始
+ */
+export const playBilibiliSong = async (
+  track: Track,
+  token: string,
+  autoPlay: boolean,
+): Promise<void> => {
+  if (
+    locked ||
+    !store.get("school.bilibili.enabled") ||
+    !store.get("school.bilibili.biliSongEnabled") ||
+    !schoolAllowsPlayback()
+  )
+    throw new Error("当前不允许播放哔哩Song");
+  const song = createBilibiliSong(track.bilibili?.url ?? "", track.title);
+  if (
+    track.source !== "bilibili" ||
+    track.id !== song.id ||
+    typeof token !== "string" ||
+    token.length > 100
+  )
+    throw new Error("哔哩Song 参数无效");
+  songRequest = token;
+  songWantsPlay = autoPlay;
+  await create();
+  if (songRequest !== token || !schoolAllowsPlayback()) return;
+  stopPlaybackCompletely();
+  coordinator.invalidate();
+  songGeneration = getSchoolScheduler().get().generation;
+  biliSongTransport.current = {
+    token,
+    trackId: song.id,
+    state: "loading",
+    position: 0,
+    duration: 0,
+  };
+  mediaService.setMetadata({ title: song.title, artists: ["哔哩Song"], album: "", durationMs: 0 });
+  const config = store.get("school.bilibili");
+  await loader!.install(config.coreEnabled && !temporaryDisabled, config.noLogin, {
+    token,
+    url: song.bilibili!.url,
+    autoPlay,
+  });
+  if (biliSongTransport.current?.token !== token || !schoolAllowsPlayback()) return;
+  view!.webContents.setAudioMuted(false);
+  await view!.webContents.loadURL(song.bilibili!.url);
+  if (songWantsPlay && biliSongTransport.current?.token === token)
+    await controlBilibiliSong("play", token);
+};
+
+/**
+ * 控制当前网页队列项，停止先同步静音再暂停页面
+ * @param command - 播放、暂停、停止或定位
+ * @param token - 必须匹配当前操作
+ * @param position - 毫秒进度
+ */
+export const controlBilibiliSong = async (
+  command: "play" | "pause" | "stop" | "seek",
+  token: string,
+  position?: number,
+): Promise<void> => {
+  const active = biliSongTransport.current;
+  if (command === "stop" && songRequest === token) songRequest = null;
+  if (!active || active.token !== token) return;
+  if (!["play", "pause", "stop", "seek"].includes(command)) throw new Error("无效网页播放操作");
+  if (command === "play" || command === "pause" || command === "stop")
+    songWantsPlay = command === "play";
+  if (
+    command !== "stop" &&
+    (!schoolAllowsPlayback() || songGeneration !== getSchoolScheduler().get().generation)
+  )
+    throw new Error("校园播放已锁定");
+  if (command === "seek" && (!Number.isFinite(position) || position! < 0))
+    throw new Error("进度无效");
+  if (command === "stop") {
+    view?.webContents.setAudioMuted(true);
+    biliSongTransport.current = null;
+    sendToMain("bilibili:song", { ...active, state: "stopped" });
+  }
+  await view?.webContents
+    .executeJavaScript(
+      `window.__carbonvSongControl?.(${JSON.stringify(command)}, ${JSON.stringify(position ?? 0)}, ${JSON.stringify(token)})`,
+      true,
+    )
+    .catch(() => {});
+};
+
+biliSongTransport.control = async (command, position) => {
+  if (biliSongTransport.current)
+    await controlBilibiliSong(command, biliSongTransport.current.token, position);
+};
 
 /** 暂停当前文档所有媒体，只在隐藏、上课和销毁时执行 */
 const pauseMedia = async (): Promise<void> => {
@@ -108,7 +259,7 @@ const create = async (): Promise<void> => {
         contextIsolation: true,
         sandbox: true,
         webSecurity: true,
-        autoplayPolicy: "user-gesture-required",
+        autoplayPolicy: "no-user-gesture-required",
       },
     });
     const wc = view.webContents;
@@ -133,6 +284,7 @@ const create = async (): Promise<void> => {
     };
     view.setVisible(false);
     wc.setWindowOpenHandler(({ url }) => {
+      if (biliSongTransport.current) return { action: "deny" };
       if (isBilibiliUrl(url))
         void wc.loadURL(url).catch((e) => {
           error = String(e);
@@ -145,6 +297,12 @@ const create = async (): Promise<void> => {
       return { action: "deny" };
     });
     wc.on("will-navigate", (event, url) => {
+      if (biliSongTransport.current) {
+        event.preventDefault();
+        error = "哔哩Song 播放中，请通过应用队列切歌";
+        publish();
+        return;
+      }
       if (!isBilibiliUrl(url)) {
         event.preventDefault();
         error = "已阻止非 B 站导航";
@@ -178,6 +336,7 @@ const create = async (): Promise<void> => {
     });
     wc.on("render-process-gone", (_event, details) => {
       error = `网页进程退出: ${details.reason}，可重新初始化`;
+      if (biliSongTransport.current) reportSong({ ...biliSongTransport.current, state: "error" });
       coordinator.invalidate();
       mediaPlaying = false;
       publish();
@@ -200,9 +359,13 @@ const create = async (): Promise<void> => {
     });
     // 先建立空白文档的调试目标，远程文档必须等脚本注册完成后才加载
     await wc.loadURL("about:blank");
-    loader = new BilikitLoader(wc, (playing) => {
-      void reportMedia(playing);
-    });
+    loader = new BilikitLoader(
+      wc,
+      (playing) => {
+        void reportMedia(playing);
+      },
+      reportSong,
+    );
     const config = store.get("school.bilibili");
     if (!config.retainLogin) await dedicated.clearData();
     await loader.install(config.coreEnabled && !temporaryDisabled, config.noLogin);
@@ -222,6 +385,12 @@ const create = async (): Promise<void> => {
  */
 const reportMedia = async (playing: boolean): Promise<void> => {
   mediaPlaying = playing;
+  if (biliSongTransport.current) {
+    if (playing && (!visible || !getMainWindow()?.isVisible() || getMainWindow()?.isMinimized()))
+      await controlBilibiliSong("pause", biliSongTransport.current.token);
+    publish();
+    return;
+  }
   if (
     playing &&
     (!visible ||
@@ -242,12 +411,15 @@ const reportMedia = async (playing: boolean): Promise<void> => {
 
 /** 上课时作废所有 MV 自动恢复任务，按配置暂停网页 */
 export const onSchoolCutoff = (): void => {
+  songRequest = null;
   coordinator.invalidate();
+  if (biliSongTransport.current) void controlBilibiliSong("stop", biliSongTransport.current.token);
   if (store.get("school.bilibili.pauseOnClass")) void pauseMedia();
 };
 
 /** 销毁视图与其注入资源，保留独立会话数据 */
 const destroy = (): void => {
+  if (biliSongTransport.current) void controlBilibiliSong("stop", biliSongTransport.current.token);
   visibilityGeneration++;
   htmlFullscreen = false;
   removeWindowListeners?.();
@@ -277,6 +449,7 @@ export const syncBilibiliConfig = async (): Promise<void> => {
     return;
   }
   if (!view || !loader) return;
+  if (biliSongTransport.current) await controlBilibiliSong("stop", biliSongTransport.current.token);
   coordinator.invalidate();
   view.webContents.setAudioMuted(config.audioPolicy === "muted");
   await loader.install(config.coreEnabled && !temporaryDisabled, config.noLogin);
@@ -332,6 +505,8 @@ export const bilibiliCommand = async (command: string, value?: unknown): Promise
     visible = false;
     view?.setVisible(false);
     await pauseMedia();
+    if (biliSongTransport.current)
+      await controlBilibiliSong("pause", biliSongTransport.current.token);
     publish();
     return getBilibiliState();
   }
@@ -341,6 +516,11 @@ export const bilibiliCommand = async (command: string, value?: unknown): Promise
   const visibilityToken = visibilityGeneration;
   await create();
   const wc = view!.webContents;
+  if (
+    biliSongTransport.current &&
+    ["navigate", "back", "forward", "reload", "disable-core", "restore-core"].includes(command)
+  )
+    await controlBilibiliSong("stop", biliSongTransport.current.token);
   switch (command) {
     case "show":
       if (visibilityToken !== visibilityGeneration) break;
@@ -359,12 +539,7 @@ export const bilibiliCommand = async (command: string, value?: unknown): Promise
       const main = getMainWindow()!;
       const zoom = main.webContents.getZoomFactor();
       const [width, height] = main.getContentSize();
-      bounds = {
-        x: Math.max(0, Math.round(b.x * zoom)),
-        y: Math.max(0, Math.round(b.y * zoom)),
-        width: Math.min(width, Math.round(b.width * zoom)),
-        height: Math.min(height, Math.round(b.height * zoom)),
-      };
+      bounds = bilibiliBounds(b, zoom, [width, height]);
       view!.setBounds(htmlFullscreen ? { x: 0, y: 0, width, height } : bounds);
       break;
     }

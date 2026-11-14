@@ -1,6 +1,12 @@
 import { initSchoolBridge } from "@/services/schoolScheduleBridge";
 import { isSchoolMode, canRequestNow, schoolState } from "@/stores/school";
 import { requestSongs } from "@/services/requestPlayback";
+import {
+  startBilibiliSong,
+  stopBilibiliSong,
+  isBilibiliSongActive,
+  controlBilibiliSong,
+} from "@/services/bilibiliSong";
 import type {
   IpcResponse,
   LoadResult,
@@ -373,6 +379,28 @@ const loadTrack = async (
     return;
   }
   const myToken = ++trackToken;
+  if (track.source === "bilibili") {
+    invalidateNextTrackPreload();
+    useMediaStore().setTrack(track);
+    useMediaStore().setPlaybackContext(context);
+    useMediaStore().setLyric(null, null);
+    lyricLoader.beginLoad();
+    resetForLoad(0);
+    try {
+      await startBilibiliSong(track, autoPlay);
+    } catch (error) {
+      if (myToken === trackToken) {
+        await stopBilibiliSong();
+        useStatusStore().state = "stopped";
+        toast.error(String(error));
+      }
+    } finally {
+      if (myToken === trackToken) useStatusStore().trackLoading = false;
+    }
+    return;
+  }
+  if (isBilibiliSongActive()) await stopBilibiliSong();
+  if (myToken !== trackToken || !canRequestNow()) return;
   // 消费预载结果
   const preloaded = transitionResult ? null : consumePreloadedTrack(track);
   // 乐观更新
@@ -542,6 +570,10 @@ let pendingPlayAfterRestore = false;
 /** 恢复播放 */
 export const play = async (): Promise<void> => {
   if (!canRequestNow()) return;
+  if (isBilibiliSongActive()) {
+    await controlBilibiliSong("play");
+    return;
+  }
   const status = useStatusStore();
   if (isRestoringLastTrack) {
     pendingPlayAfterRestore = true;
@@ -607,6 +639,10 @@ export const togglePlay = (): void => {
 /** 暂停播放 */
 export const pause = async (): Promise<void> => {
   pauseToken++;
+  if (isBilibiliSongActive()) {
+    await controlBilibiliSong("pause");
+    return;
+  }
   const status = useStatusStore();
   const prev = status.state;
   status.state = "paused";
@@ -633,7 +669,9 @@ export const stop = async (): Promise<void> => {
   invalidateNextTrackPreload();
   const status = useStatusStore();
   status.trackLoading = false;
+  const stoppingSong = stopBilibiliSong();
   const result = await window.api.player.stop();
+  await stoppingSong;
   if (token !== trackToken) return;
   if (!result.success) throw new Error(result.error ?? "停止播放失败");
   if (result.success) {
@@ -691,6 +729,10 @@ export const isSeeking = (): boolean => seekTarget !== null;
  * @param restartRound - 是否为单曲循环开启新的统计轮次
  */
 export const seek = async (posMs: number, restartRound = false): Promise<void> => {
+  if (isBilibiliSongActive()) {
+    await controlBilibiliSong("seek", posMs);
+    return;
+  }
   const status = useStatusStore();
   // 歌曲加载中 seek 无意义：引擎此刻没有可 seek 的解码线程，
   // 且 seekTarget 残留会让加载完成后的 position 推送被持续丢弃
@@ -1200,6 +1242,7 @@ export const prevTrack = async (): Promise<void> => {
 
 /** 队列播放结束，通知主进程停止并更新状态 */
 const onQueueEnded = async (): Promise<void> => {
+  await stopBilibiliSong();
   const token = invalidatePlaybackOperation();
   invalidateNextTrackPreload();
   const status = useStatusStore();
@@ -1581,6 +1624,10 @@ export const restoreLastTrack = async (): Promise<void> => {
   const settings = useSettingsStore();
   const media = useMediaStore();
   const lastTrack = status.currentTrack;
+  if (lastTrack?.source === "bilibili") {
+    status.state = "stopped";
+    return;
+  }
   if (!lastTrack) {
     status.state = "idle";
     return;

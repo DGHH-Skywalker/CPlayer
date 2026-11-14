@@ -11,6 +11,7 @@ Cplayer 在 DGHH-Skywalker/CPlayer 上扩展，原始 SPlayer-Next AGPL-3.0 许�
 - `queue` 使用串行持久化链和恢复 revision，清空等待两份队列落盘并回读校验
 - 独立 `WebContentsView` 承载 B 站，专用 Session 永不借用音乐登录态或系统浏览器凭据
 - `MvAudioCoordinator` 用控制代次、调度代次和暂停所有权决定恢复；上课作废所有恢复意图
+- 实验性哔哩Song 为明确入队的视频提供网页播放权，原生引擎和网页仍各自解码，队列交接由操作 token 及校园代次控制，详见 bilibili-song.md
 
 ## UI 与兼容
 

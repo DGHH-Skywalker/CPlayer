@@ -25,6 +25,7 @@ export interface SchoolConfig {
     enabled: boolean;
     coreEnabled: boolean;
     noLogin: boolean;
+    biliSongEnabled: boolean;
     retainLogin: boolean;
     pauseOnClass: boolean;
     audioPolicy: "pause-music" | "parallel" | "muted";

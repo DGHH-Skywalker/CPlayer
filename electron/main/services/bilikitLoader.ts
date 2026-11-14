@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import { createHash } from "node:crypto";
 import { coreLog } from "@main/utils/logger";
 import { isBilibiliUrl } from "./bilibiliPolicy";
+import { biliSongBootstrap, type BilibiliSongPage } from "./bilibiliSongPage";
 
 /** 返回已打包的本地脚本及固定版本，不从远程下载代码 */
 const readCore = () => {
@@ -45,7 +46,7 @@ export const coreBootstrap = (
     document.cookie = 'bilikit_settings=' + encodeURIComponent(JSON.stringify(safe)) + '; path=/; domain=.bilibili.com; max-age=31536000; SameSite=Lax; Secure';
     if (!${enabled && noLogin} && !document.cookie.match(/(?:^|;\\s*)DedeUserID__ckMd5=[^;]/)) document.cookie = 'DedeUserID=; path=/; domain=.bilibili.com; max-age=0; Secure';
   } catch {}
-  ${enabled ? "globalThis.__carbonv_core_document_start__ = true;\n" + source : ""}
+  ${enabled ? `const start = () => { globalThis.__carbonv_core_document_start__ = true;\n${source}\nif (window === top) carbonvMedia('{"coreReady":true}'); };\nif (document.documentElement) start(); else { const observer = new MutationObserver(() => { if (document.documentElement) { observer.disconnect(); start(); } }); observer.observe(document, {childList:true}); }` : ""}
 })();`;
 
 /** 非特权媒体报告，只发送聚合布尔状态，不接受播放控制 */
@@ -78,6 +79,7 @@ export class BilikitLoader {
   constructor(
     contents: WebContents,
     private reportMedia: (playing: boolean) => void,
+    private reportSong: (event: unknown) => void = () => {},
   ) {
     this.contents = contents;
   }
@@ -87,25 +89,27 @@ export class BilikitLoader {
    * @param enabled - 永久与临时开关计算结果
    * @param noLogin - 免登录增强设置
    */
-  install(enabled: boolean, noLogin: boolean): Promise<void> {
-    const task = this.registration.then(() => this.installNow(enabled, noLogin));
+  install(enabled: boolean, noLogin: boolean, song: BilibiliSongPage | null = null): Promise<void> {
+    const task = this.registration.then(() => this.installNow(enabled, noLogin, song));
     this.registration = task.catch(() => {});
     return task;
   }
 
   /** 按串行顺序替换脚本，避免快速切换开关产生旧注册残留 */
-  private async installNow(enabled: boolean, noLogin: boolean): Promise<void> {
+  private async installNow(
+    enabled: boolean,
+    noLogin: boolean,
+    song: BilibiliSongPage | null,
+  ): Promise<void> {
     const wc = this.contents;
     if (wc.isDestroyed()) return;
     try {
       if (enabled) {
         const core = readCore();
         this.version = core.manifest.version;
-        this.source =
-          coreBootstrap(core.source, true, noLogin) +
-          MEDIA_BOOTSTRAP +
-          `if (window === top) carbonvMedia('{"coreReady":true}');`;
+        this.source = coreBootstrap(core.source, true, noLogin) + MEDIA_BOOTSTRAP;
       } else this.source = coreBootstrap("", false, false) + MEDIA_BOOTSTRAP;
+      this.source += biliSongBootstrap(song);
       if (!wc.debugger.isAttached()) {
         wc.debugger.attach("1.3");
         wc.debugger.on("message", async (_event, method, params, sessionId) => {
@@ -132,6 +136,7 @@ export class BilikitLoader {
               isBilibiliUrl(wc.getURL())
             ) {
               const value = JSON.parse(params.payload);
+              if (value.song && !sessionId) this.reportSong(value.song);
               if (value.coreReady === true) this.loaded = true;
               if (typeof value.playing === "boolean") {
                 this.mediaContexts.set(
