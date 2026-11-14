@@ -4,6 +4,8 @@
 
 使用说明与验收：[`docs/school-scheduler.md`](docs/school-scheduler.md)、[`docs/bilibili-integration.md`](docs/bilibili-integration.md)、[`docs/testing.md`](docs/testing.md)。Windows 安装与便携包由 **Cplayer Windows** GitHub Actions 构建。开发要求 Node >=24、pnpm 12.15.0、Rust，详细依赖以 package.json 和锁文件为准。
 
+实验性「哔哩Song」可将当前 MV 页面加入音乐队列，视频结束后交接下一首。默认关闭，开关位于校园控制中心，详见 [`docs/bilibili-song.md`](docs/bilibili-song.md)。
+
 以下保留上游项目介绍与致谢。
 
 <div align="center">

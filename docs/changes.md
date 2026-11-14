@@ -8,6 +8,7 @@
 - `test-bilibili-live.ts` 提供真实匿名网站验收，已记录 Core + no-login 开启时 1920×1080 解码及进度
 - 原生视图边界裁剪到窗口剩余区域，Windows Actions 增加 125% / 150% DPI 和实际便携版音频端点检查，单独保存 acceptance-result.json
 - 新增使用与实现说明 `docs/bilibili-song.md`
+- `.github/workflows/carbonv-browser-acceptance.yml` 单独执行 Windows 真实匿名视频的增强开启、关闭增强和关闭 Core 三组验收，均成功并保留截图及 JSON
 
 ## Phase 0
 
