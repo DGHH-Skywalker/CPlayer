@@ -32,13 +32,20 @@ const run = async (): Promise<void> => {
   );
   wc.setAudioMuted(true);
   await wc.loadURL("about:blank");
-  const loader = new BilikitLoader(wc, () => {});
+  const events: Array<{ state: string }> = [];
+  const loader = new BilikitLoader(
+    wc,
+    () => {},
+    (event) => events.push(event as { state: string }),
+  );
   const core = process.env.CPLAYER_CORE_ENABLED !== "false";
   const noLogin = process.env.CPLAYER_NO_LOGIN !== "false";
-  await loader.install(core, noLogin);
   const { url } = parseBilibiliSong(
     process.env.BILIBILI_TEST_URL ?? "https://www.bilibili.com/video/BV1Y6We6jEPQ/",
   );
+  const ending = process.env.CPLAYER_TEST_ENDING === "true";
+  const token = "carbonv-live-ending";
+  await loader.install(core, noLogin, ending ? { token, url, autoPlay: true } : null);
   try {
     await wc.loadURL(url);
   } catch (error) {
@@ -91,6 +98,43 @@ const run = async (): Promise<void> => {
       result.videos.some((v: { height: number }) => v.height >= 1080),
       "所测视频没有达到 1080P",
     );
+  if (ending) {
+    await wc.executeJavaScript(
+      `(() => {
+      const video = document.querySelector('video');
+      window.__carbonvSongControl('seek', Math.max(0, video.duration * 1000 - 1500), ${JSON.stringify(token)});
+      window.__carbonvSongControl('play', 0, ${JSON.stringify(token)});
+    })()`,
+      true,
+    );
+    for (let attempt = 0; attempt < 100 && !events.some((e) => e.state === "ended"); attempt++)
+      await new Promise((done) => setTimeout(done, 500));
+    // 覆盖站点常见的五秒自动续播倒计时
+    await new Promise((done) => setTimeout(done, 6500));
+    const final = await wc.executeJavaScript(
+      "({url:location.href,videos:[...document.querySelectorAll('video')].map(v=>({paused:v.paused,ended:v.ended,time:v.currentTime,duration:v.duration}))})",
+    );
+    const endingReport = {
+      timestamp: new Date().toISOString(),
+      core,
+      noLogin,
+      ended: events.filter((e) => e.state === "ended").length,
+      final,
+    };
+    await writeFile("test-results/bilibili-ending.json", JSON.stringify(endingReport, null, 2));
+    await writeFile("test-results/bilibili-ending.png", (await wc.capturePage()).toPNG());
+    console.log(JSON.stringify(endingReport));
+    assert.equal(endingReport.ended, 1, "真实站点没有报告唯一结束");
+    assert.equal(
+      parseBilibiliSong(final.url).id,
+      parseBilibiliSong(url).id,
+      "真实站点自动跳转了下一首",
+    );
+    assert.ok(
+      final.videos.every((v: { paused: boolean }) => v.paused),
+      "结束后仍有网页视频在播放",
+    );
+  }
   loader.dispose();
   wc.close({ waitForBeforeUnload: false });
   main.destroy();

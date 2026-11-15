@@ -180,7 +180,11 @@ const playerBarInnerClass = computed(() => {
       </header>
 
       <!-- 主内容区 -->
-      <main ref="mainContainerRef" class="flex-1 overflow-y-auto overflow-x-hidden">
+      <main
+        ref="mainContainerRef"
+        data-main-content
+        class="flex-1 overflow-y-auto overflow-x-hidden"
+      >
         <RouterView v-slot="{ Component }">
           <Transition
             :name="routeTransitionName"
@@ -204,7 +208,7 @@ const playerBarInnerClass = computed(() => {
     enter-from-class="translate-y-full"
     leave-to-class="translate-y-full"
   >
-    <div v-if="showPlayerBar" :class="playerBarWrapperClass">
+    <div v-if="showPlayerBar" data-player-bar :class="playerBarWrapperClass">
       <footer :class="playerBarInnerClass">
         <PlayerBar />
       </footer>

@@ -209,6 +209,38 @@ try {
   })()`,
   );
   assert.equal(disabled.phase, "DISABLED");
+  const layout = await evaluate<{
+    footerVisible: boolean;
+    footerTop: number;
+    bounds: { y: number; height: number };
+    button: { y: number; height: number } | null;
+    toolbar: string[];
+    addressBars: number;
+  }>(
+    client,
+    `(async () => {
+    const snapshot = await window.api.school.get();
+    await window.api.school.configure({...snapshot.config,bilibili:{...snapshot.config.bilibili,biliSongEnabled:true}});
+    const app = document.getElementById('app').__vue_app__;
+    await app.config.globalProperties.$router.push('/bilibili');
+    const media = app.config.globalProperties.$pinia._s.get('media');
+    media.setTrack({id:'bilibili:BV1Y6We6jEPQ:p1',source:'bilibili',bilibili:{url:'https://www.bilibili.com/video/BV1Y6We6jEPQ/'},title:'哔哩Song 底栏验收',artists:[{name:'哔哩Song'}],duration:1000});
+    await new Promise(done=>setTimeout(done,900));
+    const footer = document.querySelector('[data-player-bar]');
+    const surface = document.querySelector('[aria-label="B 站独立浏览区域"]');
+    const state = await window.api.bilibili.command('status');
+    return {footerVisible:!!footer && footer.getBoundingClientRect().height>0,footerTop:footer?.getBoundingClientRect().top,bounds:state.bounds,button:state.buttonBounds,toolbar:[...surface.parentElement.firstElementChild.querySelectorAll('button')].map(b=>b.textContent.trim()),addressBars:surface.parentElement.querySelectorAll('input').length};
+  })()`,
+  );
+  assert.equal(layout.footerVisible, true, "哔哩Song 缺少底部播放栏");
+  assert.ok(layout.bounds.y + layout.bounds.height <= layout.footerTop + 1, "原生网页遮挡了底栏");
+  assert.ok(
+    layout.button && layout.button.y + layout.button.height <= layout.footerTop,
+    "悬浮按钮未限制在底栏上方",
+  );
+  assert.equal(layout.addressBars, 0);
+  assert.deepEqual(layout.toolbar, ["刷新", "复制链接", "MV 剧场模式", "全屏"]);
+  await writeFile("dist/bilibili-layout.json", JSON.stringify(layout, null, 2));
   const verdict = JSON.stringify({
     success: true,
     portable,
@@ -217,6 +249,8 @@ try {
     classGate: true,
     packagedCore: browser.coreVersion,
     nativeAudio,
+    bilibiliLayout: true,
+    floatingSongButton: true,
   });
   console.log(verdict);
   await writeFile("dist/acceptance-result.json", verdict + "\n");

@@ -19,7 +19,7 @@ Use the Windows x64 **setup** installer or single-file **portable** EXE from [Gi
 
 ## Start using it
 
-Open **Settings → 校园点歌** to configure campus mode, actual school times and the browser. No school timetable is preset. Enable **哔哩Song（实验性）** under the Bilibili/MV section, open a video and select **加入播放列表**.
+Open **Settings → 校园点歌** to configure campus mode, actual school times and the browser. No school timetable is preset. Enable **哔哩Song（实验性）** under the Bilibili/MV section, open a video and select **加入队列** on the floating button at the lower right.
 
 See [school scheduling](docs/school-scheduler.md), [Bilibili integration](docs/bilibili-integration.md), [哔哩Song](docs/bilibili-song.md) and [test evidence](docs/testing.md). Physical audio, sleep/resume and real-account checks require an interactive test machine; automated checks do not establish those results.
 

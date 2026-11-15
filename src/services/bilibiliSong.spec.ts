@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   control: vi.fn(),
   play: vi.fn(),
   stop: vi.fn(),
+  navigate: vi.fn(),
   status: {
     currentTrack: null as unknown,
     state: "stopped",
@@ -15,14 +16,17 @@ const mocks = vi.hoisted(() => ({
     position: 0,
     duration: 0,
     playIndex: 0,
+    isPlayerExpanded: true,
   },
   media: { track: null as unknown },
   school: { value: { generation: 0, config: {} as typeof defaultSchoolConfig } },
   allowed: true,
 }));
 vi.mock("@/core/player", () => ({ nextTrack: mocks.next, stop: mocks.playerStop }));
-vi.mock("@/stores/queue", () => ({ queueLength: { value: 3 } }));
-vi.mock("@/router", () => ({ default: { push: vi.fn() } }));
+vi.mock("@/stores/queue", () => ({ queueLength: { value: 3 }, queue: { value: [] } }));
+vi.mock("@/router", () => ({
+  default: { push: mocks.navigate, currentRoute: { value: { path: "/bilibili" } } },
+}));
 vi.mock("@/stores/status", () => ({ useStatusStore: () => mocks.status }));
 vi.mock("@/stores/media", () => ({ useMediaStore: () => mocks.media }));
 vi.mock("@/stores/school", () => ({
@@ -87,6 +91,9 @@ describe("哔哩Song 网页队列", () => {
     await handleBilibiliSongEvent(event);
     await handleBilibiliSongEvent(event);
     expect(mocks.next).toHaveBeenCalledTimes(1);
+    expect(mocks.control).toHaveBeenCalledWith("stop", token);
+    expect(mocks.navigate).toHaveBeenLastCalledWith("/");
+    expect(mocks.status.isPlayerExpanded).toBe(false);
     expect(isBilibiliSongActive()).toBe(false);
   });
   it("上课作废视频结束的自动切歌", async () => {
@@ -147,5 +154,28 @@ describe("哔哩Song 网页队列", () => {
     finish({ success: true });
     await starting;
     expect(mocks.play).not.toHaveBeenCalled();
+  });
+  it("视频结束的停止等待跨越上课边界，不返回播放新音乐", async () => {
+    await startBilibiliSong(track, true);
+    const token = mocks.play.mock.calls[0]![1];
+    let finish!: () => void;
+    mocks.control.mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        finish = resolve;
+      }),
+    );
+    const ending = handleBilibiliSongEvent({
+      token,
+      trackId: track.id,
+      state: "ended",
+      position: 1000,
+      duration: 1000,
+    });
+    mocks.school.value.generation++;
+    mocks.allowed = false;
+    finish();
+    await ending;
+    expect(mocks.next).not.toHaveBeenCalled();
+    expect(mocks.navigate).not.toHaveBeenCalledWith("/");
   });
 });

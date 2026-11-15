@@ -16,6 +16,8 @@ import type { Track } from "@shared/types/player";
 import { createBilibiliSong, parseBilibiliSong } from "@shared/bilibiliSong";
 import { biliSongTransport } from "./bilibiliSongTransport";
 import { stopPlaybackCompletely } from "@main/ipc/player";
+import { BilibiliSongButton } from "./bilibiliSongButton";
+import { BILIBILI_HOME } from "@shared/constants/bilibili";
 import * as nowPlaying from "./nowPlaying";
 import * as mediaService from "./media";
 
@@ -37,6 +39,7 @@ let mediaPlaying = false;
 let songGeneration = -1;
 let songRequest: string | null = null;
 let songWantsPlay = false;
+let songButton: BilibiliSongButton | null = null;
 
 const coordinator = new MvAudioCoordinator({
   isPlaying: () => getPlayer().getStatus().state === "playing",
@@ -51,7 +54,7 @@ const coordinator = new MvAudioCoordinator({
 
 /** 读取专用浏览器状态，绝不包含 Cookie 或账号凭据 */
 export const getBilibiliState = (): BilibiliState => ({
-  url: view?.webContents.getURL() ?? "https://www.bilibili.com/",
+  url: view?.webContents.getURL() ?? BILIBILI_HOME,
   title: view?.webContents.getTitle() ?? "哔哩哔哩",
   loading: view?.webContents.isLoading() ?? false,
   error,
@@ -63,10 +66,52 @@ export const getBilibiliState = (): BilibiliState => ({
   coreLoaded: loader?.loaded ?? false,
   coreVersion: loader?.version ?? "0.5.35",
   partition: BILIBILI_PARTITION,
+  bounds: view?.getBounds() ?? { x: 0, y: 0, width: 0, height: 0 },
+  buttonBounds: songButton?.view.getBounds() ?? null,
 });
 
 /** 将非敏感浏览器状态发给主窗口 */
-const publish = (): void => sendToMain("bilibili:state", getBilibiliState());
+const publish = (): void => {
+  updateSongButton();
+  sendToMain("bilibili:state", getBilibiliState());
+};
+
+/** 原生悬浮按钮必须跟随网页边界和课间状态，远程网页不获得入队 IPC */
+const updateSongButton = (): void => {
+  if (!view) return;
+  const main = getMainWindow();
+  if (
+    !visible ||
+    !store.get("school.bilibili.biliSongEnabled") ||
+    !main?.isVisible() ||
+    main.isMinimized()
+  ) {
+    songButton?.dispose();
+    songButton = null;
+    return;
+  }
+  if (!songButton)
+    songButton = new BilibiliSongButton(main, () => {
+      try {
+        if (!visible || locked || !schoolAllowsPlayback()) return;
+        sendToMain("bilibili:request", { track: currentBilibiliSong() });
+      } catch (error) {
+        sendToMain("bilibili:request", { error: String(error) });
+      }
+    });
+  let video = false;
+  try {
+    parseBilibiliSong(view.webContents.getURL());
+    video = true;
+  } catch {
+    /* 搜索等非视频页禁用入队 */
+  }
+  songButton.update(
+    view.getBounds(),
+    visible && store.get("school.bilibili.biliSongEnabled"),
+    video && schoolAllowsPlayback(),
+  );
+};
 
 /**
  * 接收当前队列项的有限媒体状态，拒绝旧文档、重复结束和上课后的回调
@@ -80,7 +125,7 @@ const reportSong = (input: unknown): void => {
     event.token !== active.token ||
     active.state === "ended" ||
     active.state === "stopped" ||
-    !["playing", "paused", "ended", "error"].includes(event.state) ||
+    !["playing", "paused", "loading", "ended", "error"].includes(event.state) ||
     !Number.isFinite(event.position) ||
     !Number.isFinite(event.duration)
   )
@@ -96,6 +141,16 @@ const reportSong = (input: unknown): void => {
     duration: Math.max(0, event.duration),
   };
   biliSongTransport.current = next;
+  if (
+    event.state === "loading" &&
+    songWantsPlay &&
+    visible &&
+    getMainWindow()?.isVisible() &&
+    !getMainWindow()?.isMinimized()
+  )
+    void controlBilibiliSong("play", active.token).catch((error) =>
+      coreLog.warn("哔哩Song 播放器重建后恢复失败", error),
+    );
   if (event.state === "ended" || event.state === "error") {
     view?.webContents.setAudioMuted(true);
   }
@@ -280,15 +335,23 @@ const create = async (): Promise<void> => {
     );
     main.contentView.addChildView(view);
     const onHidden = (): void => {
-      void pauseMedia();
+      updateSongButton();
+      if (biliSongTransport.current)
+        void controlBilibiliSong("pause", biliSongTransport.current.token);
+      else void pauseMedia();
     };
+    const onShown = (): void => updateSongButton();
     const onClosed = (): void => destroy();
     main.on("hide", onHidden);
     main.on("minimize", onHidden);
+    main.on("show", onShown);
+    main.on("restore", onShown);
     main.once("closed", onClosed);
     removeWindowListeners = () => {
       main.removeListener("hide", onHidden);
       main.removeListener("minimize", onHidden);
+      main.removeListener("show", onShown);
+      main.removeListener("restore", onShown);
       main.removeListener("closed", onClosed);
     };
     view.setVisible(false);
@@ -378,10 +441,12 @@ const create = async (): Promise<void> => {
       if (!view) return;
       const [width, height] = main.getContentSize();
       view.setBounds({ x: 0, y: 0, width, height });
+      updateSongButton();
     });
     wc.on("leave-html-full-screen", () => {
       htmlFullscreen = false;
       view?.setBounds(bounds);
+      updateSongButton();
     });
     wc.on("media-started-playing", () => {
       void reportMedia(true);
@@ -401,7 +466,7 @@ const create = async (): Promise<void> => {
     const config = store.get("school.bilibili");
     if (!config.retainLogin) await dedicated.clearData();
     await loader.install(config.coreEnabled && !temporaryDisabled, config.noLogin);
-    void wc.loadURL("https://www.bilibili.com/").catch((e) => {
+    void wc.loadURL(BILIBILI_HOME).catch((e) => {
       error = String(e);
     });
     publish();
@@ -445,12 +510,15 @@ const reportMedia = async (playing: boolean): Promise<void> => {
 export const onSchoolCutoff = (): void => {
   songRequest = null;
   coordinator.invalidate();
+  updateSongButton();
   if (biliSongTransport.current) void controlBilibiliSong("stop", biliSongTransport.current.token);
   if (store.get("school.bilibili.pauseOnClass")) void pauseMedia();
 };
 
 /** 销毁视图与其注入资源，保留独立会话数据 */
 const destroy = (): void => {
+  songButton?.dispose();
+  songButton = null;
   if (biliSongTransport.current) void controlBilibiliSong("stop", biliSongTransport.current.token);
   visibilityGeneration++;
   htmlFullscreen = false;
@@ -470,6 +538,7 @@ const destroy = (): void => {
 
 /** 核心配置变更后重新注册 document-start 脚本并重载 */
 export const syncBilibiliConfig = async (): Promise<void> => {
+  updateSongButton();
   if (locked) return;
   const config = store.get("school.bilibili");
   const key = JSON.stringify(config);
@@ -536,6 +605,7 @@ export const bilibiliCommand = async (command: string, value?: unknown): Promise
     visibilityGeneration++;
     visible = false;
     view?.setVisible(false);
+    updateSongButton();
     await pauseMedia();
     if (biliSongTransport.current)
       await controlBilibiliSong("pause", biliSongTransport.current.token);

@@ -23,7 +23,7 @@
 2. 自行配置学校实际课间；首次启动没有预设作息
 3. 搜索歌曲并点歌，队列支持拖拽调整；上课期间锁定新增和播放
 4. 在「B 站与 MV」启用浏览器和所需增强
-5. 如需将 MV 入队，开启「哔哩Song（实验性）」，打开视频后点击「加入播放列表」
+5. 如需将 MV 入队，开启「哔哩Song（实验性）」，打开视频后点击右下角悬浮按钮「加入队列」
 
 说明：[课程调度](docs/school-scheduler.md)、[浏览器集成](docs/bilibili-integration.md)、[哔哩Song](docs/bilibili-song.md)、[架构](docs/architecture.md)、[测试与未验证项目](docs/testing.md)。真实扬声器截止、实体睡眠恢复和账号登录需要交互式测试机，自动测试不替代现场验收。
 

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { app, BrowserWindow, WebContentsView, session } from "electron";
 import { BilikitLoader } from "../electron/main/services/bilikitLoader";
 import { biliSongBootstrap } from "../electron/main/services/bilibiliSongPage";
+import { BilibiliSongButton } from "../electron/main/services/bilibiliSongButton";
 import { bilibiliBounds } from "../electron/main/services/bilibiliPolicy";
 
 app.disableHardwareAcceleration();
@@ -45,7 +46,23 @@ const run = async (): Promise<void> => {
     }
     if (url.pathname.startsWith("/video/"))
       return new Response(
-        `<!doctype html><video id="mv" src="/tone.wav" muted></video><script>window.siteNext = 0; document.addEventListener('ended', () => { window.siteNext++; history.pushState({}, '', '/video/BV1wHWe68Eh3/?p=2'); document.querySelector('video').play().catch(() => {}); }, true);</script>`,
+        `<!doctype html><video id="mv" src="/tone.wav" muted loop></video><script>
+          window.siteNext = 0; window.siteAttempts = 0;
+          const video = document.querySelector('video');
+          video.loop = true; video.setAttribute('loop', '');
+          window.addEventListener('ended', () => { window.siteNext++; history.pushState({}, '', '/video/BV1wHWe68Eh3/?p=2'); video.play().catch(() => {}); }, true);
+          video.addEventListener('timeupdate', () => {
+            video.loop = true;
+            const mode = new URLSearchParams(location.search).get('test');
+            if (mode && !window.siteAttempts && video.currentTime > (mode === 'early-rebuild' ? .3 : .85)) {
+              window.siteAttempts++;
+              video.remove();
+              const next = document.createElement('video'); next.muted = true; next.src = '/tone.wav?next'; document.body.append(next);
+              next.addEventListener('playing', () => window.siteNext++);
+              next.play().catch(() => {});
+            }
+          });
+        </script>`,
         { headers: { "content-type": "text/html" } },
       );
     const content =
@@ -55,6 +72,9 @@ const run = async (): Promise<void> => {
     return new Response(content, { headers: { "content-type": "text/html; charset=utf-8" } });
   });
   const window = new BrowserWindow({ show: false, width: 1100, height: 760 });
+  await window.loadURL(
+    "data:text/html,<style>body{margin:0;background:rgb(18,24,36)}</style><footer style='position:fixed;bottom:0;height:80px;width:100%;background:rgb(60,90,160)'>Cplayer player controls</footer>",
+  );
   const view = new WebContentsView({
     webPreferences: {
       session: dedicated,
@@ -70,6 +90,7 @@ const run = async (): Promise<void> => {
   const wc = view.webContents;
   for (const zoom of [1, 1.25, 1.5]) {
     window.webContents.setZoomFactor(zoom);
+    await new Promise((done) => setTimeout(done, 20));
     const desired = bilibiliBounds(
       { x: 200, y: 100, width: 900, height: 660 },
       zoom,
@@ -86,7 +107,17 @@ const run = async (): Promise<void> => {
   const loader = new BilikitLoader(
     wc,
     () => {},
-    (event) => songEvents.push(event as { state: string }),
+    (event) => {
+      songEvents.push(event as { state: string });
+      const value = event as { state: string; token: string };
+      if (value.state === "loading")
+        void wc
+          .executeJavaScript(
+            `window.__carbonvSongControl('play', 0, ${JSON.stringify(value.token)})`,
+            true,
+          )
+          .catch(() => {});
+    },
   );
   console.log("注册 document-start");
   await loader.install(true, false);
@@ -117,31 +148,112 @@ const run = async (): Promise<void> => {
     url: "https://www.bilibili.com/video/BV1wHWe68Eh3/",
     autoPlay: true,
   };
-  // 编译生成的字符串必须保持正则和脚本语法有效
-  new Function(biliSongBootstrap(song));
-  await loader.install(false, false, song);
-  await wc.loadURL(song.url);
-  await wc.executeJavaScript("window.__carbonvSongControl('play', 0, 'fixture-song')", true);
-  for (let attempt = 0; attempt < 50 && !songEvents.some((e) => e.state === "ended"); attempt++)
-    await new Promise((done) => setTimeout(done, 100));
-  if (!songEvents.some((e) => e.state === "ended"))
-    console.log(
-      "哔哩Song 媒体样本",
-      songEvents,
-      await wc.executeJavaScript(
-        "({ control: typeof __carbonvSongControl, state: document.querySelector('video').readyState, time: document.querySelector('video').currentTime, error: document.querySelector('video').error?.message })",
-      ),
-    );
-  assert.equal(songEvents.filter((e) => e.state === "ended").length, 1);
-  assert.equal(await wc.executeJavaScript("window.siteNext"), 0);
-  assert.equal(wc.getURL(), song.url);
-  assert.equal(
+  window.show();
+  wc.focus();
+  // 原生结束、window 捕获抢占、循环和结束前播放器重建均必须只推进一次
+  for (const mode of ["", "late-rebuild", "early-rebuild"]) {
+    songEvents.length = 0;
+    const current = {
+      ...song,
+      token: `fixture-${mode}`,
+      url: song.url + (mode ? `?test=${mode}` : ""),
+    };
+    new Function(biliSongBootstrap(current));
+    await loader.install(false, false, current);
+    await wc.loadURL(current.url);
     await wc.executeJavaScript(
-      "document.querySelector('video').play().then(() => false, () => true)",
-    ),
-    true,
+      `window.__carbonvSongControl('play', 0, ${JSON.stringify(current.token)})`,
+      true,
+    );
+    for (let attempt = 0; attempt < 70 && !songEvents.some((e) => e.state === "ended"); attempt++)
+      await new Promise((done) => setTimeout(done, 100));
+    if (!songEvents.some((e) => e.state === "ended"))
+      console.log(
+        "未结束样本",
+        mode,
+        songEvents,
+        await wc.executeJavaScript(
+          "[...document.querySelectorAll('video')].map(v=>({time:v.currentTime,duration:v.duration,paused:v.paused,ended:v.ended,ready:v.readyState,error:v.error?.message}))",
+        ),
+      );
+    assert.equal(
+      songEvents.filter((e) => e.state === "ended").length,
+      1,
+      `未收到唯一结束事件: ${mode}`,
+    );
+    assert.equal(await wc.executeJavaScript("window.siteNext"), mode === "early-rebuild" ? 1 : 0);
+    assert.equal(wc.getURL(), current.url);
+    assert.equal(
+      await wc.executeJavaScript(
+        "document.querySelector('video').play().then(() => false, () => true)",
+      ),
+      true,
+    );
+    console.log(`哔哩Song 循环、window 捕获与播放器重建验证通过: ${mode || "natural"}`);
+  }
+  // 原生本地按钮在远程视图之上，不向网页提供任何特权 API
+  let requested = 0;
+  const button = new BilibiliSongButton(window, () => {
+    requested++;
+  });
+  const ready = new Promise<void>((done) =>
+    button.view.webContents.once("did-finish-load", () => done()),
   );
-  console.log("哔哩Song 自然结束一次、阻止站点续播与分 P 跳转验证通过");
+  button.update({ x: 200, y: 64, width: 800, height: 500 }, true, true);
+  await ready;
+  for (const zoom of [1, 1.25, 1.5]) {
+    window.webContents.setZoomFactor(zoom);
+    await new Promise((done) => setTimeout(done, 20));
+    button.update({ x: 200, y: 64, width: 800, height: 500 }, true, true);
+    const b = button.view.getBounds();
+    assert.ok(b.y + b.height <= 565 - Math.round(16 * zoom), JSON.stringify({ zoom, b }));
+    assert.equal(button.view.webContents.getZoomFactor(), zoom);
+  }
+  window.webContents.setZoomFactor(1);
+  button.update({ x: 200, y: 64, width: 800, height: 500 }, true, true);
+  assert.equal(window.contentView.children.at(-1), button.view);
+  assert.ok(button.view.getBounds().y + button.view.getBounds().height < 564);
+  assert.equal(await button.view.webContents.executeJavaScript("typeof window.api"), "undefined");
+  await button.view.webContents.executeJavaScript("document.querySelector('button').click()");
+  assert.equal(requested, 0);
+  window.show();
+  button.view.webContents.focus();
+  button.view.webContents.sendInputEvent({
+    type: "mouseDown",
+    x: 20,
+    y: 20,
+    button: "left",
+    clickCount: 1,
+  });
+  button.view.webContents.sendInputEvent({
+    type: "mouseUp",
+    x: 20,
+    y: 20,
+    button: "left",
+    clickCount: 1,
+  });
+  await new Promise((done) => setTimeout(done, 100));
+  assert.equal(requested, 1);
+  button.update({ x: 200, y: 64, width: 800, height: 500 }, true, false);
+  button.view.webContents.sendInputEvent({
+    type: "mouseDown",
+    x: 20,
+    y: 20,
+    button: "left",
+    clickCount: 1,
+  });
+  button.view.webContents.sendInputEvent({
+    type: "mouseUp",
+    x: 20,
+    y: 20,
+    button: "left",
+    clickCount: 1,
+  });
+  await new Promise((done) => setTimeout(done, 100));
+  assert.equal(requested, 1);
+  button.dispose();
+  window.hide();
+  console.log("本地悬浮按钮层级、真实点击与上课禁用验证通过");
   await loader.install(true, true);
   await wc.loadURL("https://www.bilibili.com/next");
   assert.equal(await wc.executeJavaScript("window.noLoginAtFirstScript"), true);

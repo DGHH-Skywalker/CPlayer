@@ -69,6 +69,12 @@ const getInstallType = (): "nsis" | "portable" | "appx" | "dmg" | "appimage" => 
 // 暴露给渲染进程的自定义 API
 const api = {
   bilibili: {
+    onRequest: (
+      callback: (request: { track?: import("@shared/types/player").Track; error?: string }) => void,
+    ) => {
+      ipcRenderer.removeAllListeners("bilibili:request");
+      return subscribe("bilibili:request", callback);
+    },
     song: () => ipcRenderer.invoke("bilibili:current-song"),
     playSong: (track: import("@shared/types/player").Track, token: string, autoPlay: boolean) =>
       ipcRenderer.invoke("bilibili:play-song", track, token, autoPlay),

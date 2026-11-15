@@ -24,10 +24,13 @@ export interface BilibiliState {
   coreLoaded: boolean;
   coreVersion: string;
   partition: string;
+  bounds: { x: number; y: number; width: number; height: number };
+  buttonBounds: { x: number; y: number; width: number; height: number } | null;
 }
 
 /** 浏览器管理接口，仅向主窗口暴露 */
 export interface BilibiliApi {
+  onRequest(callback: (request: { track?: Track; error?: string }) => void): () => void;
   song(): Promise<Track>;
   playSong(track: Track, token: string, autoPlay: boolean): Promise<void>;
   controlSong(

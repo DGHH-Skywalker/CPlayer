@@ -19,6 +19,7 @@ jobs:
       CI: true
       CPLAYER_CORE_ENABLED: ${{ matrix.mode == 'core-off' && 'false' || 'true' }}
       CPLAYER_NO_LOGIN: ${{ matrix.mode == 'enhanced' && 'true' || 'false' }}
+      CPLAYER_TEST_ENDING: "true"
     steps:
       - uses: actions/checkout@v6
       - uses: pnpm/action-setup@v6

@@ -5,10 +5,17 @@ import { useMediaStore } from "@/stores/media";
 import { canRequestNow, schoolState } from "@/stores/school";
 import * as playback from "@/services/playback";
 import { nextTrack, stop } from "@/core/player";
-import { queueLength } from "@/stores/queue";
+import { queueLength, queue } from "@/stores/queue";
 import { toast } from "@/composables/useToast";
 
-let active: { token: string; id: string; generation: number; finished?: boolean } | null = null;
+let active: {
+  token: string;
+  id: string;
+  generation: number;
+  revision: number;
+  finished?: boolean;
+} | null = null;
+let revision = 0;
 let unsubscribe: (() => void) | undefined;
 
 /** 判断原生事件是否应由当前网页队列项隔离 */
@@ -39,9 +46,34 @@ export const handleBilibiliSongEvent = async (event: BilibiliSongEvent): Promise
     owner.finished = true;
     playback.setPlaying(false);
     status.state = "stopped";
-    if (status.playIndex >= queueLength.value - 1) await stop();
+    const index = status.playIndex;
+    await window.api.bilibili.controlSong("stop", owner.token);
+    if (
+      active !== owner ||
+      revision !== owner.revision ||
+      !canRequestNow() ||
+      owner.generation !== schoolState.value.generation
+    )
+      return;
+    active = null;
+    status.isPlayerExpanded = false;
+    const { default: router } = await import("@/router");
+    if (
+      queue.value[index + 1]?.source !== "bilibili" &&
+      router.currentRoute.value.path === "/bilibili"
+    )
+      await router.push("/");
+    if (
+      active ||
+      revision !== owner.revision ||
+      !canRequestNow() ||
+      owner.generation !== schoolState.value.generation ||
+      status.playIndex !== index ||
+      status.currentTrack?.id !== owner.id
+    )
+      return;
+    if (index >= queueLength.value - 1) await stop();
     else await nextTrack();
-    if (active === owner) await stopBilibiliSong();
   } else if (event.state === "error") {
     await stopBilibiliSong();
     status.state = "stopped";
@@ -67,8 +99,10 @@ export const startBilibiliSong = async (track: Track, autoPlay: boolean): Promis
     token: crypto.randomUUID(),
     id: track.id,
     generation: schoolState.value.generation,
+    revision: ++revision,
   };
   active = owner;
+  useStatusStore().isPlayerExpanded = false;
   if (previous) await window.api.bilibili.controlSong("stop", previous.token);
   if (active !== owner || !canRequestNow()) return;
   if (!unsubscribe)
@@ -86,6 +120,7 @@ export const startBilibiliSong = async (track: Track, autoPlay: boolean): Promis
 
 /** 停止并作废当前网页项，空状态下无需发送 IPC */
 export const stopBilibiliSong = async (): Promise<void> => {
+  revision++;
   const owner = active;
   active = null;
   if (owner) await window.api.bilibili.controlSong("stop", owner.token);
@@ -100,6 +135,13 @@ export const controlBilibiliSong = async (
   command: "play" | "pause" | "seek",
   position?: number,
 ): Promise<void> => {
-  if (active && canRequestNow())
-    await window.api.bilibili.controlSong(command, active.token, position);
+  const owner = active;
+  if (!owner || !canRequestNow()) return;
+  if (command === "play") {
+    useStatusStore().isPlayerExpanded = false;
+    const { default: router } = await import("@/router");
+    await router.push("/bilibili");
+  }
+  if (active === owner && canRequestNow() && owner.generation === schoolState.value.generation)
+    await window.api.bilibili.controlSong(command, owner.token, position);
 };
