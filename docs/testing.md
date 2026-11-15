@@ -1,5 +1,17 @@
 # 验证记录
 
+## 2026-11-15 v1.3.1 哔哩Song 页面与结束交接
+
+源码提交：`da33063e4f8881095c2fddec5bcd0ec992469e1d`，标签 `v1.3.1`。
+
+本地 Node 53 项、Web 82 文件 641 项、TypeScript 与 ESLint 已通过。Electron 44 受控媒体覆盖自然结束、window 捕获监听顺序、站点反复开启 loop、片尾重建和中途重建；结束仅上报一次且拒绝站点再次播放。原生悬浮按钮覆盖本地视图层级、DOM 点击无法触发入队、真实输入、上课禁用及 100% / 125% / 150% 应用缩放。新增几何单测覆盖底栏入场动画、浮动播放栏及窄窗口裁剪。
+
+09:29:33 UTC，真实匿名 B 站样本 BV1Y6We6jEPQ 在 Core/no-login 开启时实际解码 1920×1080、readyState=4；跳至片尾后继续等待 6.5 秒，09:29:42 UTC 只收到一次结束，currentTime=duration=973.6 秒、paused=true、ended=true，URL 保持当前视频。该测试验证片尾拦截，队列交接和上课代次由单元测试分别覆盖。
+
+内存比较采用同一受控文档、可见窗口和 Core，启动后 60 秒读取 app.getAppMetrics 的进程工作集总和：改动前 433868 KiB，显示新悬浮控件后 528356 KiB，增加约 92.3 MiB。该代价来自独立的本地原生视图进程，目的是在远程 WebContentsView 上安全显示控件；它不加载 Vue、preload 或应用 IPC，实验功能关闭、页面隐藏或窗口最小化时立即销毁。此数据不是完整应用或长期性能基准。
+
+Windows 发布与实际程序几何检查：[Actions](https://github.com/DGHH-Skywalker/CPlayer/actions/runs/43771006387)。Windows 三模式真实网站与片尾检查：[Actions](https://github.com/DGHH-Skywalker/CPlayer/actions/runs/43771011330)。下方历史记录保留原始环境与当时的限制，不代表本轮重新出现同样问题。
+
 ## 2026-11-15 正式发布 v1.3.0
 
 发布源码提交：`4fd12e4d239bea630ad7d5bef6c97b44c061fe68`，标签 `v1.3.0`。

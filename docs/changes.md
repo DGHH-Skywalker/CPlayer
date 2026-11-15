@@ -1,5 +1,15 @@
 # Cplayer 修改记录
 
+## 2026-11-15 v1.3.1 哔哩Song 修复
+
+- `shared/constants/bilibili.ts`：统一搜索首页，浏览器创建与清理后均打开 search.bilibili.com
+- `src/pages/Bilibili.vue`：删除返回、点歌、后退、前进、地址栏与标题行，保留刷新、复制、模式与全屏
+- `bilibiliSurface.ts`、`MainLayout.vue`：按内容和播放栏实际边界裁剪原生网页，预留底栏动画和浮动布局空间
+- `bilibiliSongButton.ts`、浏览器及 preload：本地原生右下角悬浮入队按钮，隔离远程网页，支持缩放和校园闸门
+- `bilibiliSongPage.ts`：首脚本前捕获 window 结束、强制关闭循环、识别片尾与中途播放器重建，结束暂停且阻止站点连播
+- `src/services/bilibiliSong.ts`：收起音乐全屏，等待网页停止后再返回并切到队列下一项，旧异步回调受代次约束
+- 单元、Electron、真实站点及 Windows 便携包检查增加片尾、缩放、底栏和悬浮按钮验收，测试结果见 testing.md
+
 ## 2026-11-14 哔哩Song 与继续验收
 
 - 新增 `shared/bilibiliSong.ts`、`bilibiliSongPage.ts`、`bilibiliSongTransport.ts`、`src/services/bilibiliSong.ts` 和测试，实现默认关闭的网页曲目实验功能

@@ -55,18 +55,20 @@ const run = async (): Promise<void> => {
     )
       throw error;
   }
+  let stable = 0;
   for (let attempt = 0; attempt < 60; attempt++) {
     const decoded = await wc.executeJavaScript(
-      "[...document.querySelectorAll('video')].some(v => v.readyState >= 2 && v.videoWidth > 0)",
+      "[...document.querySelectorAll('video')].some(v => v.readyState >= 2 && v.videoWidth > 0 && !v.paused && v.currentTime > 0)",
     );
     await wc.executeJavaScript(
       "document.querySelectorAll('video').forEach(v => { v.muted = true; void v.play().catch(() => {}); })",
       true,
     );
-    if (decoded) break;
+    // 避免把刚解码就被站点重建的播放器视为稳定播放
+    stable = decoded ? stable + 1 : 0;
+    if (stable >= 3) break;
     await new Promise((done) => setTimeout(done, 1000));
   }
-  await new Promise((done) => setTimeout(done, 2000));
   const result = await wc.executeJavaScript(
     "({ url: location.href, title: document.title, node: typeof require, early: !!globalThis.__carbonv_core_document_start__, videos: [...document.querySelectorAll('video')].map(v => ({width:v.videoWidth,height:v.videoHeight,readyState:v.readyState,paused:v.paused,time:v.currentTime,error:v.error?.code})) })",
   );
@@ -79,6 +81,7 @@ const run = async (): Promise<void> => {
     version: loader.version,
     loggedIn,
     result,
+    events,
   };
   await mkdir("test-results", { recursive: true });
   await writeFile("test-results/bilibili-live.json", JSON.stringify(report, null, 2));
