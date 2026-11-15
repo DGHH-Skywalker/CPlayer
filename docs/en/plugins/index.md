@@ -1,6 +1,6 @@
 # Plugin overview and architecture
 
-Plugins are JavaScript files that use the injected `splayer` object to extend SPlayer-Next.
+Plugins are JavaScript files that use the injected `splayer` object to extend Cplayer.
 
 | Guide                                         | Contents                                                                                    |
 | --------------------------------------------- | ------------------------------------------------------------------------------------------- |
@@ -168,4 +168,4 @@ Promise-based calls reject on permission or parameter errors. Platform API busin
 
 ## Publishing
 
-Submit your script through the New Plugin or Update Plugin issue template in [SPlayer-Dev/plugins](https://github.com/SPlayer-Dev/plugins). After validation and maintainer review, it becomes available in the plugin market.
+Submit your script through the New Plugin or Update Plugin issue template in [Cplayer-Dev/plugins](https://github.com/Cplayer-Dev/plugins). After validation and maintainer review, it becomes available in the plugin market.

@@ -14,7 +14,7 @@ const fileAssociations = [...SUPPORTED_AUDIO_EXTENSIONS].map((extension) => {
 const config: Configuration = {
   appId: "app.carbonv.player",
   productName: "Cplayer",
-  copyright: "Copyright © imsyy 2025",
+  copyright: "Copyright © CarbonVPlayer contributors; original contributions © imsyy",
   directories: { buildResources: "public" },
   fileAssociations,
   afterPack: "./scripts/after-pack.ts",
@@ -88,6 +88,10 @@ const config: Configuration = {
       from: "LICENSE",
       to: "LICENSE",
     },
+    {
+      from: "NOTICE.md",
+      to: "NOTICE.md",
+    },
   ],
   win: {
     executableName: "Cplayer",
@@ -143,7 +147,7 @@ const config: Configuration = {
     executableName: "Cplayer",
     icon: "public/icons/favicon-512x512.png",
     artifactName: "${name}-${version}-${arch}.${ext}",
-    maintainer: "imsyy.top",
+    maintainer: "DGHH-Skywalker",
     category: "Audio;Music;AudioVideo;",
     target: ["AppImage", "deb", "rpm", "tar.gz", "pacman"],
     syncDesktopName: true,

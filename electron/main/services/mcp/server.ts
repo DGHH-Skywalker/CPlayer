@@ -18,7 +18,7 @@ const jsonContent = (value: unknown) => ({
 });
 
 /**
- * 创建并注册 SPlayer MCP 工具与资源
+ * 创建并注册 Cplayer MCP 工具与资源
  * @returns 供 HTTP 会话使用的 MCP 服务
  */
 const createServer = (): McpServer => {
@@ -32,7 +32,7 @@ const createServer = (): McpServer => {
     {
       title: "获取播放状态",
       description:
-        "获取 SPlayer 当前播放状态、队列索引、进度、时长和音量。currentIndex 从 0 开始，无当前队列项时为 -1。时间单位为毫秒",
+        "获取 Cplayer 当前播放状态、队列索引、进度、时长和音量。currentIndex 从 0 开始，无当前队列项时为 -1。时间单位为毫秒",
       annotations: { readOnlyHint: true, idempotentHint: true },
     },
     () => jsonContent(playerControl.getStatus()),
@@ -244,7 +244,7 @@ const createServer = (): McpServer => {
     "now-playing",
     "splayer://now-playing",
     {
-      title: "SPlayer 当前播放",
+      title: "Cplayer 当前播放",
       description: "不含完整歌词正文的当前歌曲与播放位置轻量快照",
       mimeType: "application/json",
     },
@@ -263,7 +263,7 @@ const createServer = (): McpServer => {
     "library-summary",
     "splayer://library/summary",
     {
-      title: "SPlayer 曲库摘要",
+      title: "Cplayer 曲库摘要",
       description: "本地曲库的歌曲、专辑和艺术家数量",
       mimeType: "application/json",
     },
@@ -285,5 +285,5 @@ const createServer = (): McpServer => {
   return server;
 };
 
-/** 创建 SPlayer MCP HTTP 端点 */
+/** 创建 Cplayer MCP HTTP 端点 */
 export const createMcpEndpoint = (): McpEndpoint => createHttpEndpoint(createServer);

@@ -68,10 +68,10 @@ export default defineConfig(
     },
   },
   {
-    files: ["**/*.cjs"],
+    files: ["**/*.{cjs,mjs}"],
     rules: {
       "@typescript-eslint/no-require-imports": "off",
-      // CommonJS 脚本无法标注返回类型，由 JSDoc 说明
+      // JavaScript 脚本无法标注 TypeScript 返回类型，由 JSDoc 说明
       "@typescript-eslint/explicit-function-return-type": "off",
     },
   },

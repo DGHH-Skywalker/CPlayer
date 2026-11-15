@@ -2,15 +2,14 @@
   "name": "carbonv_player",
   "productName": "Cplayer",
   "desktopName": "app.carbonv.player",
-  "version": "1.2.1",
+  "version": "1.3.0",
   "description": "CarbonVPlayer 校园课间点歌与 B 站 MV 桌面播放器",
   "type": "module",
   "packageManager": "pnpm@12.15.0",
   "main": "./out/main/index.js",
   "author": {
-    "name": "imsyy",
-    "email": "imsyy1024@gmail.com",
-    "url": "https://imsyy.top"
+    "name": "DGHH-Skywalker",
+    "url": "https://github.com/DGHH-Skywalker"
   },
   "homepage": "https://github.com/DGHH-Skywalker/CPlayer",
   "repository": {
@@ -144,5 +143,11 @@
     "*.{json,yaml,yml,md,css,scss}": [
       "prettier --write"
     ]
-  }
+  },
+  "contributors": [
+    {
+      "name": "imsyy",
+      "url": "https://github.com/imsyy"
+    }
+  ]
 }

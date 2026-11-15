@@ -130,7 +130,7 @@ const result = await splayer.api.call("netease", "/api/listen/together/status/ge
 
 :::
 
-路径不能是完整 URL。`params` 不接受 `cookie`、`domain`、`proxy` 和 `headers`；外部服务请求使用 [request](#request)。接口名及业务参数与应用接口模块一致，可查阅 [接口实现](https://github.com/SPlayer-Dev/SPlayer-Next/tree/dev/electron/main/apis)。
+路径不能是完整 URL。`params` 不接受 `cookie`、`domain`、`proxy` 和 `headers`；外部服务请求使用 [request](#request)。接口名及业务参数与应用接口模块一致，可查阅 [接口实现](https://github.com/DGHH-Skywalker/CPlayer/tree/dev/electron/main/apis)。
 
 ## 网络与通知 {#network}
 

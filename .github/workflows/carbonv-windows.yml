@@ -6,12 +6,19 @@ on:
   pull_request:
     branches: [dev]
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      ref:
+        description: Git ref to verify and package
+        required: false
+        type: string
+        default: ""
 
 permissions:
   contents: read
 
 concurrency:
-  group: carbonv-windows-${{ github.ref }}
+  group: carbonv-windows-${{ inputs.ref || github.ref }}
   cancel-in-progress: true
 
 env:
@@ -25,6 +32,8 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref || github.ref }}
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v6
         with:
@@ -48,6 +57,8 @@ jobs:
         run: pnpm lint
       - name: Unit tests
         run: pnpm test
+      - name: Build documentation
+        run: pnpm docs:build
       - name: Electron browser isolation and early injection
         run: pnpm test:electron
       - name: Electron native view at 125 and 150 percent DPI
@@ -60,11 +71,23 @@ jobs:
         run: pnpm build:win --x64 --publish never
       - name: Launch packaged portable app and check class gate
         run: pnpm exec tsx scripts/test-packaged-windows.ts
+      - name: Record build provenance
+        id: provenance
+        shell: bash
+        run: |
+          node --input-type=module <<'JS'
+          import { execFileSync } from 'node:child_process';
+          import { readFileSync, writeFileSync, appendFileSync } from 'node:fs';
+          const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
+          const commit = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+          writeFileSync('dist/build-provenance.json', JSON.stringify({ version: pkg.version, commit, run: `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}` }, null, 2));
+          appendFileSync(process.env.GITHUB_OUTPUT, `commit=${commit}\n`);
+          JS
       - name: Upload installers, portable app and source provenance
         if: always() && steps.package.outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
-          name: Cplayer-Windows-x64-${{ github.sha }}
+          name: Cplayer-Windows-x64-${{ steps.provenance.outputs.commit || github.sha }}
           if-no-files-found: error
           retention-days: 30
           path: |
@@ -72,5 +95,6 @@ jobs:
             dist/*-portable.exe
             dist/portable-smoke.log
             dist/acceptance-result.json
+            dist/build-provenance.json
             docs/testing.md
             vendor/bilikit/manifest.json

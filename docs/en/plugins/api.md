@@ -130,7 +130,7 @@ const result = await splayer.api.call("netease", "/api/listen/together/status/ge
 
 :::
 
-Paths cannot be full URLs. `params` does not accept `cookie`, `domain`, `proxy`, or `headers`; use [request](#request) for external services. Endpoint names and business parameters match the application's [API modules](https://github.com/SPlayer-Dev/SPlayer-Next/tree/dev/electron/main/apis).
+Paths cannot be full URLs. `params` does not accept `cookie`, `domain`, `proxy`, or `headers`; use [request](#request) for external services. Endpoint names and business parameters match the application's [API modules](https://github.com/DGHH-Skywalker/CPlayer/tree/dev/electron/main/apis).
 
 ## Network and notifications {#network}
 

@@ -1,6 +1,6 @@
 # 插件总览与架构
 
-插件是通过全局对象 `splayer` 扩展 SPlayer-Next 的 JavaScript 脚本。
+插件是通过全局对象 `splayer` 扩展 Cplayer 的 JavaScript 脚本。
 
 | 文档                                | 内容                                                     |
 | ----------------------------------- | -------------------------------------------------------- |
@@ -168,4 +168,4 @@ splayer.player.on("trackChange", ({ track }) => {
 
 ## 发布插件
 
-在 [SPlayer-Dev/plugins](https://github.com/SPlayer-Dev/plugins) 使用「新建插件」或「更新插件」Issue 模板提交脚本，通过校验和维护者审核后进入插件市场。
+在 [Cplayer-Dev/plugins](https://github.com/Cplayer-Dev/plugins) 使用「新建插件」或「更新插件」Issue 模板提交脚本，通过校验和维护者审核后进入插件市场。

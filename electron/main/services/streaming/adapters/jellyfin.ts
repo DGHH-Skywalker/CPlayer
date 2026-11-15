@@ -14,7 +14,7 @@ export interface StreamingAuthSession {
 
 const CLIENT_NAME = "CarbonVPlayer";
 const CLIENT_VERSION = "1.0.0";
-const DEVICE_NAME = "SPlayer Desktop";
+const DEVICE_NAME = "Cplayer Desktop";
 const REQUEST_TIMEOUT_MS = 15_000;
 
 interface JellyItem {

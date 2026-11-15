@@ -1,6 +1,6 @@
 # LX 兼容
 
-SPlayer-Next 可导入 LX 的 `user_api` 音源脚本。应用自动注入 `lx` 兼容接口，无需修改脚本入口。
+Cplayer 可导入 LX 的 `user_api` 音源脚本。应用自动注入 `lx` 兼容接口，无需修改脚本入口。
 
 ## 导入脚本
 

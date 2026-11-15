@@ -1,116 +1,46 @@
 # Cplayer · CarbonVPlayer
 
-校园课间点歌与 B 站 MV 桌面播放器，基于 SPlayer-Next，保留原作者版权和 AGPL-3.0 许可。
+面向 Windows 的校园课间点歌与 B 站 MV 桌面播放器，包名 `carbonv_player`。
 
-使用说明与验收：[`docs/school-scheduler.md`](docs/school-scheduler.md)、[`docs/bilibili-integration.md`](docs/bilibili-integration.md)、[`docs/testing.md`](docs/testing.md)。Windows 安装与便携包由 **Cplayer Windows** GitHub Actions 构建。开发要求 Node >=24、pnpm 12.15.0、Rust，详细依赖以 package.json 和锁文件为准。
+[English](README.md) · [下载最新版](https://github.com/DGHH-Skywalker/CPlayer/releases/latest) · [反馈问题](https://github.com/DGHH-Skywalker/CPlayer/issues)
 
-实验性「哔哩Song」可将当前 MV 页面加入音乐队列，视频结束后交接下一首。默认关闭，开关位于校园控制中心，详见 [`docs/bilibili-song.md`](docs/bilibili-song.md)。
+## 下载与安装
 
-以下保留上游项目介绍与致谢。
+在 [GitHub Releases](https://github.com/DGHH-Skywalker/CPlayer/releases/latest) 下载 Windows x64 安装包（setup）或单文件便携版（portable）。每次发布均附源码、构建来源和 `SHA256SUMS.txt`。中国大陆镜像地址列在对应 Release 中；镜像为第三方下载代理，请使用同一版本的校验值核对文件。
 
-<div align="center">
+## 主要功能
 
-<img alt="SPlayer-Next logo" width="120" height="120" src="public/icons/favicon.png" />
+- 普通音乐模式：本地音乐、流媒体、歌词、歌单与播放队列
+- 校园点歌模式：纯搜索首页、FIFO 队尾点歌、去重、拖拽排序
+- 课间调度：上海时区每周作息、特殊日期与停用日期，到上课时间强制停止并清空当前队列
+- 独立 B 站浏览器：网页与 MV 剧场、独立登录存储、固定本地 Core、音频协调、浏览数据管理
+- 实验性「哔哩Song」：将当前 MV 页面加入队列，结束后拦截站点续播并交接下一项
+- 独立发布：通过 GitHub Actions 检查、构建和发布，不连接原官方自动更新流程
 
-<h2>SPlayer-Next</h2>
+## 快速开始
 
-<p>🎵 跨平台桌面音乐播放器，支持丰富的歌词展现形式与广泛的音频格式</p>
+1. 打开「设置 → 校园点歌」启用校园模式
+2. 自行配置学校实际课间；首次启动没有预设作息
+3. 搜索歌曲并点歌，队列支持拖拽调整；上课期间锁定新增和播放
+4. 在「B 站与 MV」启用浏览器和所需增强
+5. 如需将 MV 入队，开启「哔哩Song（实验性）」，打开视频后点击「加入播放列表」
 
-<p>「<a href="https://github.com/SPlayer-Dev/SPlayer">SPlayer</a>」的继任版本</p>
+说明：[课程调度](docs/school-scheduler.md)、[浏览器集成](docs/bilibili-integration.md)、[哔哩Song](docs/bilibili-song.md)、[架构](docs/architecture.md)、[测试与未验证项目](docs/testing.md)。真实扬声器截止、实体睡眠恢复和账号登录需要交互式测试机，自动测试不替代现场验收。
 
-[![Stars](https://img.shields.io/github/stars/SPlayer-Dev/SPlayer-Next?style=flat)](https://github.com/SPlayer-Dev/SPlayer-Next/stargazers)
-[![Release](https://img.shields.io/github/v/release/SPlayer-Dev/SPlayer-Next)](https://github.com/SPlayer-Dev/SPlayer-Next/releases)
-[![License](https://img.shields.io/github/license/SPlayer-Dev/SPlayer-Next)](https://github.com/SPlayer-Dev/SPlayer-Next/blob/main/LICENSE)
-[![Issues](https://img.shields.io/github/issues/SPlayer-Dev/SPlayer-Next)](https://github.com/SPlayer-Dev/SPlayer-Next/issues)
+## 开发与发布
 
-[English](./README.md) | **简体中文**
-
-</div>
-
----
-
-## 功能特性
-
-- 🎵 **广泛的格式支持** —— MP3、FLAC、WAV、AAC、OGG、APE 等，基于 FFmpeg 解码
-- 📝 **丰富的歌词** —— LRC / QRC / YRC / TTML，逐字高亮与翻译，支持桌面、灵动岛、任务栏歌词窗口
-- 🌐 **流媒体服务** —— Subsonic / Navidrome / Jellyfin / Emby（多服务器、自动连接）
-- 🖥️ **跨平台** —— Windows / macOS / Linux
-- 🎚️ **音乐频谱** —— 实时 FFT 可视化
-- 🏷️ **元信息编辑** —— 编辑本地曲目标签与封面
-- ⬇️ **下载** —— 内置下载管理器
-- 🎧 **系统媒体集成** —— Windows SMTC / Linux MPRIS / macOS Now Playing + Discord RPC
-- ⚡ **高性能音频引擎** —— FFmpeg + Rust
-- 🎨 **自适应主题** —— 基于封面取色，Light / Dark / Auto
-- 📈 **Last.fm Scrobble**
-
-## 开发
-
-### 环境要求
-
-- **Node.js** >= 22
-- **pnpm** >= 10
-- **Rust 工具链**（构建原生模块所需，见下）
-
-### 原生模块
-
-核心性能特性由 Rust 编写的原生模块提供：
-
-| 模块            | 说明                                               |
-| --------------- | -------------------------------------------------- |
-| `audio-engine`  | 高性能音频解码（FFmpeg）、播放、FFT 频谱、封面提取 |
-| `media-ctrl`    | 系统媒体控制 + Discord Rich Presence               |
-| `taskbar-lyric` | Windows 任务栏歌词原生渲染                         |
-
-`pnpm dev` 与 `pnpm build` 会自动编译原生模块。若只做 UI 开发想跳过，可设置 `SKIP_NATIVE_BUILD=true`。
-
-### 快速开始
+使用 Node 24.22.1、pnpm 12.15.0 及原生模块所需 Rust 工具链，依赖使用锁文件安装。
 
 ```bash
-# 1. 安装依赖
-pnpm install
-
-# 2. 启动开发（先以 debug 构建原生模块，再启动 Electron）
-pnpm dev
+pnpm install --frozen-lockfile
+pnpm typecheck
+pnpm lint
+pnpm test
+pnpm build:win --x64 --publish never
 ```
 
-### 构建
+正式构建在 GitHub Actions Windows runner 完成，包含原生模块、单元测试、DPI 与便携包启动检查。Release 工作流上传安装包、便携版、对应源码、来源记录及校验文件。操作见 [发布维护说明](docs/releasing.md)。真实匿名视频另有独立 Windows 验收工作流。
 
-```bash
-pnpm build         # 完整构建：清理 → 原生模块 → 类型检查 → electron-vite
+## 许可与归属
 
-pnpm build:win     # 打包 Windows
-pnpm build:mac     # 打包 macOS
-pnpm build:linux   # 打包 Linux（AppImage / deb / rpm / tar.gz / pacman）
-```
-
-> 默认仅构建当前架构，暂不支持交叉编译。
-
-### 其他脚本
-
-```bash
-pnpm typecheck        # tsc + vue-tsc（node + web 双目标）
-pnpm lint             # ESLint
-pnpm format           # Prettier
-pnpm build:native     # 仅构建 Rust 原生模块（加 `--dev` 为 debug 构建）
-```
-
-## 致谢
-
-特别感谢以下让 SPlayer-Next 成为可能的开源项目：
-
-- [applemusic-like-lyrics](https://github.com/Steve-xmh/applemusic-like-lyrics) —— 类 Apple Music 歌词显示组件库
-- [NeteaseCloudMusicApiEnhanced](https://github.com/neteasecloudmusicapienhanced/api-enhanced) —— 网易云音乐 API 备份 + 增强
-
-## 开源许可
-
-本项目基于 [GNU Affero General Public License v3.0 (AGPL-3.0)](https://www.gnu.org/licenses/agpl-3.0.html) 许可开源。
-
-- **修改与分发：** 任何修改或分发都必须同样基于 **AGPL-3.0**，并一并提供完整源代码。
-- **派生作品：** 必须同样采用 **AGPL-3.0**，并在适当位置保留本项目的许可与版权信息。
-- **署名：** 必须保留原作者及版权信息。可为二次开发添加你自己的署名，但不得移除或篡改原始信息。
-- **商业用途：** 如用于售卖或其他盈利用途，必须提供源代码及原项目链接。由于本项目涉及第三方服务，商业使用可能存在法律风险。
-- **免责：** 本软件按「现状」提供，不附带任何形式的担保，详见 AGPL-3.0。
-
-## 免责声明
-
-本项目仅供个人学习与研究使用，禁止用于商业及非法用途。部分功能依赖第三方 API，使用者须自行确保其使用符合相关法律法规及服务协议。对于因使用本项目而产生的任何直接或间接后果，作者不承担任何责任。
+遵循 [AGPL-3.0](LICENSE)，原作者和贡献者保留各自代码版权，来源见 [NOTICE](NOTICE.md)。Core 保留 [MIT 许可](vendor/bilikit/LICENSE) 及 [品牌资产条款](vendor/bilikit/BRAND-ASSETS.md)。平台商标、音乐与视频内容归相应权利人所有。

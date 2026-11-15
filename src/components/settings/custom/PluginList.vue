@@ -161,7 +161,7 @@ const pendingName = computed(() => {
 const isEmpty = computed(() => list.value.length === 0);
 
 /** 插件开发文档 */
-const DOCS_URL = "https://splayer-next.imsyy.top/plugins/";
+const DOCS_URL = "https://github.com/DGHH-Skywalker/CPlayer/blob/dev/docs/plugins-usage.md";
 /** 提交入口 */
 const SUBMIT_URL = "https://github.com/SPlayer-Dev/plugins/issues/new/choose";
 

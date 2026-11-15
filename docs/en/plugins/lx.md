@@ -1,6 +1,6 @@
 # LX Compatibility
 
-SPlayer-Next can import LX `user_api` source scripts. The application injects the `lx` compatibility API automatically.
+Cplayer can import LX `user_api` source scripts. The application injects the `lx` compatibility API automatically.
 
 ## Importing scripts
 

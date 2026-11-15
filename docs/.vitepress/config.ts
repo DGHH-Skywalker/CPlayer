@@ -2,7 +2,7 @@ import { defineConfig, type DefaultTheme, type UserConfig } from "vitepress";
 import llmstxt from "vitepress-plugin-llms";
 
 const socialLinks: DefaultTheme.SocialLink[] = [
-  { icon: "github", link: "https://github.com/SPlayer-Dev/SPlayer-Next" },
+  { icon: "github", link: "https://github.com/DGHH-Skywalker/CPlayer" },
 ];
 
 const zhTheme: DefaultTheme.Config = {
@@ -28,7 +28,7 @@ const zhTheme: DefaultTheme.Config = {
         { text: "隐私策略", link: "/privacy" },
       ],
     },
-    { text: "GitHub", link: "https://github.com/SPlayer-Dev/SPlayer-Next" },
+    { text: "GitHub", link: "https://github.com/DGHH-Skywalker/CPlayer" },
   ],
   sidebar: [
     {
@@ -100,10 +100,10 @@ const zhTheme: DefaultTheme.Config = {
   footer: {
     message:
       '基于 AGPL-3.0 许可发布 | <a href="/agreement">用户协议</a> | <a href="/privacy">隐私策略</a>',
-    copyright: "Copyright © 2025-present imsyy",
+    copyright: "CarbonVPlayer contributors · AGPL-3.0",
   },
   editLink: {
-    pattern: "https://github.com/SPlayer-Dev/SPlayer-Next/blob/dev/docs/:path?plain=1",
+    pattern: "https://github.com/DGHH-Skywalker/CPlayer/blob/dev/docs/:path?plain=1",
     text: "查看或编辑此页",
   },
   lastUpdated: {
@@ -135,7 +135,7 @@ const enTheme: DefaultTheme.Config = {
         { text: "Privacy Policy", link: "/en/privacy" },
       ],
     },
-    { text: "GitHub", link: "https://github.com/SPlayer-Dev/SPlayer-Next" },
+    { text: "GitHub", link: "https://github.com/DGHH-Skywalker/CPlayer" },
   ],
   sidebar: [
     {
@@ -200,10 +200,10 @@ const enTheme: DefaultTheme.Config = {
   footer: {
     message:
       'Released under AGPL-3.0 | <a href="/en/agreement">User Agreement</a> | <a href="/en/privacy">Privacy Policy</a>',
-    copyright: "Copyright © 2025-present imsyy",
+    copyright: "CarbonVPlayer contributors · AGPL-3.0",
   },
   editLink: {
-    pattern: "https://github.com/SPlayer-Dev/SPlayer-Next/blob/dev/docs/:path?plain=1",
+    pattern: "https://github.com/DGHH-Skywalker/CPlayer/blob/dev/docs/:path?plain=1",
     text: "View or edit this page",
   },
   lastUpdated: {
@@ -217,17 +217,17 @@ export default defineConfig({
   vite: {
     plugins: llmstxt({ workDir: "en" }) as unknown as NonNullable<UserConfig["vite"]>["plugins"],
   },
-  title: "SPlayer-Next",
+  title: "Cplayer",
   markdown: { math: true },
   srcExclude: ["superpowers/**"],
   head: [
     ["link", { rel: "icon", href: "/favicon.png" }],
-    ["meta", { name: "author", content: "imsyy" }],
+    ["meta", { name: "author", content: "DGHH-Skywalker" }],
     [
       "meta",
       {
         name: "keywords",
-        content: "SPlayer,SPlayer-Next,music player,desktop lyrics,streaming,Electron,Vue3,Rust",
+        content: "Cplayer,CarbonVPlayer,music player,desktop lyrics,streaming,Electron,Vue3,Rust",
       },
     ],
   ],
@@ -248,7 +248,7 @@ export default defineConfig({
   },
   themeConfig: {
     logo: "/favicon.png",
-    siteTitle: "SPlayer-Next",
+    siteTitle: "Cplayer",
     socialLinks,
     search: {
       provider: "local",

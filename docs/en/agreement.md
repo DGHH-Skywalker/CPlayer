@@ -1,6 +1,6 @@
 <!-- agreement-version: 3 -->
 
-# SPlayer Next User Agreement and Disclaimer
+# Cplayer User Agreement and Disclaimer
 
 **Version: v1.2**  
 **Effective: May 29, 2026**  
@@ -8,11 +8,11 @@
 
 This English translation is provided for convenience. If it differs from the [Chinese agreement](/agreement), the Chinese text prevails.
 
-SPlayer Next is a free and open-source cross-platform desktop music player. Read this agreement, especially limitations of liability, governing law, and dispute provisions, before downloading or using it. If you do not agree, stop using and delete the software. Minors should review it with a guardian.
+Cplayer is a free and open-source cross-platform desktop music player. Read this agreement, especially limitations of liability, governing law, and dispute provisions, before downloading or using it. If you do not agree, stop using and delete the software. Minors should review it with a guardian.
 
 ## 1. Definitions
 
-- **Developer:** The copyright holders and open-source contributors, including the `SPlayer-Dev` GitHub organization and project author.
+- **Developer:** The copyright holders and open-source contributors, including the `Cplayer-Dev` GitHub organization and project author.
 - **User / you:** Any individual or organization that installs or uses the software.
 - **Local content:** Audio stored on your devices or storage you are authorized to access.
 - **Online platform:** A public online music service operated independently by a third party.
@@ -29,11 +29,11 @@ The software itself does not provide, host, or distribute audio content and does
 
 ## 3. AGPL-3.0 license
 
-SPlayer Next is licensed under the GNU Affero General Public License v3.0. The complete license is in `LICENSE`.
+Cplayer is licensed under the GNU Affero General Public License v3.0. The complete license is in `LICENSE`.
 
 When copying, modifying, or redistributing the software, comply with AGPL-3.0, including preserving notices, providing corresponding source where required, identifying modifications, and not imposing incompatible additional restrictions. If a modified version is offered for remote network interaction, AGPL-3.0 section 13 may require offering its complete corresponding source to those users.
 
-The official source repository is <https://github.com/SPlayer-Dev/SPlayer-Next>. This agreement explains functionality, third-party risks, trademarks, and applicable law; it does not reduce rights granted by AGPL-3.0. If a conflict exists, AGPL-3.0 prevails.
+The official source repository is <https://github.com/DGHH-Skywalker/CPlayer>. This agreement explains functionality, third-party risks, trademarks, and applicable law; it does not reduce rights granted by AGPL-3.0. If a conflict exists, AGPL-3.0 prevails.
 
 ## 4. Scope and acceptable use
 
@@ -53,7 +53,7 @@ You must be authorized to access each configured server and its content. You are
 
 ### 5.3 Plugins and sources
 
-The software includes an open extension mechanism and optional plugin market. Market entries index third-party submissions; they are not authored or operated by the SPlayer Next developers unless explicitly stated.
+The software includes an open extension mechanism and optional plugin market. Market entries index third-party submissions; they are not authored or operated by the Cplayer developers unless explicitly stated.
 
 Market submissions receive automated checks and maintainer review, but this is not a complete security audit, legal determination, or endorsement. Locally or remotely imported plugins do not pass through market review. Plugins are executable code that can make network requests and persist data, so inspect their source and permissions and install only trusted plugins.
 
@@ -73,7 +73,7 @@ You are responsible for protecting accounts, devices, and credentials.
 
 ## 7. Intellectual property and trademarks
 
-Copyright in the software remains with its contributors subject to AGPL-3.0. Rights in the “SPlayer” and “SPlayer Next” names, logos, and visual identity are reserved. Do not use them in a way that creates confusion, false affiliation, or endorsement. Rights in third-party content remain with their respective owners.
+Copyright in the software remains with its contributors subject to AGPL-3.0. Cplayer / CarbonVPlayer identifies this modified distribution; original and third-party trademarks and visual assets remain with their respective owners. See NOTICE.md for attribution. Do not use them in a way that creates confusion, false affiliation, or endorsement. Rights in third-party content remain with their respective owners.
 
 ## 8. User responsibility
 
@@ -85,7 +85,7 @@ The software does not include developer-controlled telemetry or usage analytics 
 
 ## 10. Distribution channels and security
 
-Official version information and original packages are published through <https://github.com/SPlayer-Dev/SPlayer-Next>; <https://splayer-next.imsyy.top> provides documentation and download entry points.
+Official version information and original packages are published through <https://github.com/DGHH-Skywalker/CPlayer>; <https://github.com/DGHH-Skywalker/CPlayer/blob/dev/docs> provides documentation and download entry points.
 
 The website may offer third-party acceleration routes that proxy official GitHub assets, so requests pass through those services. Other mirrors, app stores, repackaged builds, and redistributions are not controlled or verified by the developers and are not official releases. They may be modified, outdated, bundled, or malicious.
 
@@ -125,7 +125,6 @@ If a provision is invalid or unenforceable, the remaining provisions continue to
 
 ## 19. Contact
 
-- [GitHub repository](https://github.com/SPlayer-Dev/SPlayer-Next)
-- [Issue tracker](https://github.com/SPlayer-Dev/SPlayer-Next/issues)
-- [Official website](https://splayer-next.imsyy.top)
-- Email: imsyy1024@gmail.com
+- [GitHub repository](https://github.com/DGHH-Skywalker/CPlayer)
+- [Issue tracker](https://github.com/DGHH-Skywalker/CPlayer/issues)
+- [Official website](https://github.com/DGHH-Skywalker/CPlayer/blob/dev/docs)

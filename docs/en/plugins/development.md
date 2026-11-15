@@ -73,8 +73,8 @@ These resources are generated from the English Markdown sources on every documen
 Specify behavior, triggers, settings, and any services the plugin needs. For example:
 
 ```text
-Read https://splayer-next.imsyy.top/llms.txt and the relevant documentation,
-then develop a SPlayer-Next plugin.
+Read https://github.com/DGHH-Skywalker/CPlayer/blob/dev/docs/llms.txt and the relevant documentation,
+then develop a Cplayer plugin.
 
 Behavior: Log the title on track changes, with a plugin setting to disable logging.
 Plugin ID: you.track-log

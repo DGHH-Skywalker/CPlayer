@@ -1,10 +1,10 @@
-# SPlayer-Next Copilot 指引
+# Cplayer Copilot 指引
 
 本仓库所有 Copilot 会话、Code Review、建议，**一律使用中文作答**（代码、标识符、注释保持原项目语言）。
 
 ## 项目概述
 
-SPlayer-Next 是基于 **Electron + Vue 3 + TypeScript** 的桌面音乐播放器，后继 SPlayer，搭配 **Rust NAPI-RS** 原生模块做音频解码、系统媒体集成、任务栏集成。
+Cplayer 是基于 **Electron + Vue 3 + TypeScript** 的桌面音乐播放器，后继 Cplayer，搭配 **Rust NAPI-RS** 原生模块做音频解码、系统媒体集成、任务栏集成。
 
 ### 进程架构
 

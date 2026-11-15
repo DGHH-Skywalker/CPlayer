@@ -73,8 +73,8 @@ splayer.player.on("trackChange", ({ track }) => {
 说明插件要做什么、何时触发、有哪些设置，以及需要连接的服务。可以使用以下提示词：
 
 ```text
-请先读取 https://splayer-next.imsyy.top/llms.txt 及与任务有关的文档，
-为 SPlayer-Next 开发一个插件：
+请先读取 https://github.com/DGHH-Skywalker/CPlayer/blob/dev/docs/llms.txt 及与任务有关的文档，
+为 Cplayer 开发一个插件：
 
 功能：歌曲切换时记录曲目名称，可在插件设置中关闭。
 插件 ID：you.track-log

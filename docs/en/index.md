@@ -2,9 +2,9 @@
 layout: home
 
 hero:
-  name: "SPlayer-Next"
-  text: "Music, the way it should be"
-  tagline: A clean and refined cross-platform desktop music player with broad format support, expressive lyrics, deep performance optimization, and carefully crafted details.
+  name: "Cplayer"
+  text: "School music requests and MV playback"
+  tagline: CarbonVPlayer combines FIFO requests, school break scheduling, a Bilibili browser and experimental queued MV playback.
   actions:
     - theme: brand
       text: Download
@@ -14,7 +14,7 @@ hero:
       link: /en/guide
     - theme: alt
       text: GitHub
-      link: https://github.com/SPlayer-Dev/SPlayer-Next
+      link: https://github.com/DGHH-Skywalker/CPlayer
 
 features:
   - icon: 🎵

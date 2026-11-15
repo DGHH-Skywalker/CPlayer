@@ -3,9 +3,9 @@
 layout: home
 
 hero:
-  name: "SPlayer-Next"
-  text: "听音乐，本该如此"
-  tagline: 一款简洁而精致的多平台桌面音乐播放器。支持多种音频格式与丰富的歌词展现形式，性能经过深度优化，每一处细节都恰到好处。
+  name: "Cplayer"
+  text: "课间点歌与 MV 播放"
+  tagline: CarbonVPlayer 支持课间 FIFO 点歌、上课强制停止清队列、独立 B 站浏览器与实验性哔哩Song。
   actions:
     - theme: brand
       text: 立即下载
@@ -15,7 +15,7 @@ hero:
       link: /guide
     - theme: alt
       text: GitHub
-      link: https://github.com/SPlayer-Dev/SPlayer-Next
+      link: https://github.com/DGHH-Skywalker/CPlayer
 
 features:
   - icon: 🎵

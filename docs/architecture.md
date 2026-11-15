@@ -1,6 +1,6 @@
 # CarbonVPlayer 架构
 
-Cplayer 在 DGHH-Skywalker/CPlayer 上扩展，原始 SPlayer-Next AGPL-3.0 许可和作者信息保留。包名 carbonv_player，桌面应用 ID app.carbonv.player，与原版使用独立用户数据目录。
+Cplayer 在 DGHH-Skywalker/CPlayer 上扩展，原始 Cplayer AGPL-3.0 许可和作者信息保留。包名 carbonv_player，桌面应用 ID app.carbonv.player，与原版使用独立用户数据目录。
 
 ## 进程边界
 

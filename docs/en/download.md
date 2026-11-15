@@ -1,86 +1,10 @@
----
-title: Download
----
+# Download Cplayer
 
-# Download SPlayer-Next
+Windows x64 builds are available from [GitHub Releases](https://github.com/DGHH-Skywalker/CPlayer/releases/latest):
 
-The list below fetches the latest release for the selected channel from GitHub and recommends a package for your system. Stable is selected by default. If GitHub is slow, choose a download mirror.
+- `Cplayer-<version>-x64-setup.exe`: installer
+- `Cplayer-<version>-x64-portable.exe`: portable app
+- `CarbonVPlayer-<version>-source.zip`: corresponding source
+- `SHA256SUMS.txt`: checksums
 
-<DownloadPage />
-
-## Release channels
-
-| Channel     | Intended audience       | Releases received | Example              |
-| ----------- | ----------------------- | ----------------- | -------------------- |
-| **Stable**  | Everyday use            | Stable            | `1.2.0`              |
-| **Beta**    | Early feature access    | Beta, then Stable | `1.3.0-beta.1`       |
-| **Nightly** | Development and testing | Daily builds      | `1.3.0-nightly.1100` |
-
-Beta is promoted from Nightly every week, and Nightly is built every day. Change the channel under **Settings → General → Release channel**. Nightly builds may be highly unstable. After moving to a more stable channel, updates resume once that channel publishes a higher version.
-
-## Other sources
-
-- **Previous versions:** Browse all archived builds on [GitHub Releases](https://github.com/SPlayer-Dev/SPlayer-Next/releases).
-- **Development builds:** Download the latest workflow artifact from [GitHub Actions](https://github.com/SPlayer-Dev/SPlayer-Next/actions). A GitHub account is required.
-
-## Installation notes
-
-- **Windows:** Choose the installer for automatic updates or the single-file portable build.
-- **macOS:** If macOS reports that the app is damaged or cannot verify it, see [macOS reports a damaged app](/en/troubleshooting/macos-damaged).
-- **Linux:** Choose AppImage if you are unsure which package format your distribution uses. See [Ubuntu sandbox startup failure](/en/troubleshooting/ubuntu-sandbox) for launch errors.
-
-## Linux installation
-
-### Arch Linux
-
-SPlayer-Next is now available in the [Arch Linux Chinese Community Repository](https://www.archlinuxcn.org/archlinux-cn-repo-and-mirror/).
-
-If the repository is not configured yet, follow the [wiki](https://wiki.archlinuxcn.org/zh/Arch_Linux_%E4%B8%AD%E6%96%87%E7%A4%BE%E5%8C%BA%E4%BB%93%E5%BA%93) to set it up.
-
-Once configured, install it directly:
-
-```bash
-sudo pacman -S splayer-next
-```
-
-The repository also provides a debug symbols package, useful when investigating crashes:
-
-```bash
-sudo pacman -S splayer-next-debug
-```
-
-> [!IMPORTANT]
-> If the package is out of date, or you run into an error caused by packaging, **please do not report it in this project's repository, but to the Arch Linux Chinese Community Repository**.
-> Open an issue [here](https://github.com/archlinuxcn/repo/issues/new/choose), or [email the package maintainer](mailto:nlsdt@archlinuxcn.org).
-
-### Linux package formats
-
-| Format   | Distributions                                    |
-| -------- | ------------------------------------------------ |
-| AppImage | Distribution-independent; no installation needed |
-| deb      | Debian, Ubuntu, Linux Mint                       |
-| rpm      | Fedora, RHEL, openSUSE                           |
-| pacman   | Manjaro                                          |
-| tar.gz   | Generic archive for manual extraction            |
-
-```bash
-# AppImage
-chmod +x ./splayer-next-*.AppImage
-./splayer-next-*.AppImage
-./splayer-next-*.AppImage --appimage-extract
-
-# deb
-sudo apt install ./splayer-next-*.deb
-
-# rpm
-sudo dnf install ./splayer-next-*.rpm
-sudo zypper install ./splayer-next-*.rpm
-
-# pacman
-sudo pacman -U ./splayer-next-*.pacman
-
-# Archive
-tar -xzf ./splayer-next-*.tar.gz
-cd splayer-next-*/
-./SPlayer-Next
-```
+Mainland mirror links are included in each release. Verify mirrored files against the same release checksums. This application uses manual downloads rather than automatic update channels. macOS and Linux source builds are available to developers; this release provides Windows x64 binaries.

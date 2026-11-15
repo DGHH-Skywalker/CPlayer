@@ -1,116 +1,42 @@
 # Cplayer · CarbonVPlayer
 
-校园课间点歌与 B 站 MV 桌面播放器，基于 SPlayer-Next，保留原作者版权和 AGPL-3.0 许可。
+Windows-first desktop music requests, school break scheduling and Bilibili MV playback.
 
-使用说明与验收：[`docs/school-scheduler.md`](docs/school-scheduler.md)、[`docs/bilibili-integration.md`](docs/bilibili-integration.md)、[`docs/testing.md`](docs/testing.md)。Windows 安装与便携包由 **Cplayer Windows** GitHub Actions 构建。开发要求 Node >=24、pnpm 12.15.0、Rust，详细依赖以 package.json 和锁文件为准。
+[简体中文](README.zh-CN.md) · [Latest release](https://github.com/DGHH-Skywalker/CPlayer/releases/latest) · [Issues](https://github.com/DGHH-Skywalker/CPlayer/issues)
 
-实验性「哔哩Song」可将当前 MV 页面加入音乐队列，视频结束后交接下一首。默认关闭，开关位于校园控制中心，详见 [`docs/bilibili-song.md`](docs/bilibili-song.md)。
+## Download
 
-以下保留上游项目介绍与致谢。
-
-<div align="center">
-
-<img alt="SPlayer-Next logo" width="120" height="120" src="public/icons/favicon.png" />
-
-<h2>SPlayer-Next</h2>
-
-<p>🎵 Cross-platform desktop music player with rich lyric support and wide audio format compatibility.</p>
-
-<p>Successor to <a href="https://github.com/SPlayer-Dev/SPlayer">SPlayer</a>.</p>
-
-[![Stars](https://img.shields.io/github/stars/SPlayer-Dev/SPlayer-Next?style=flat)](https://github.com/SPlayer-Dev/SPlayer-Next/stargazers)
-[![Release](https://img.shields.io/github/v/release/SPlayer-Dev/SPlayer-Next)](https://github.com/SPlayer-Dev/SPlayer-Next/releases)
-[![License](https://img.shields.io/github/license/SPlayer-Dev/SPlayer-Next)](https://github.com/SPlayer-Dev/SPlayer-Next/blob/main/LICENSE)
-[![Issues](https://img.shields.io/github/issues/SPlayer-Dev/SPlayer-Next)](https://github.com/SPlayer-Dev/SPlayer-Next/issues)
-
-**English** | [简体中文](./README.zh-CN.md)
-
-</div>
-
----
+Use the Windows x64 **setup** installer or single-file **portable** EXE from [GitHub Releases](https://github.com/DGHH-Skywalker/CPlayer/releases/latest). Verify the download with `SHA256SUMS.txt` from the same release. Mainland mirror links are listed in each release; they are third-party download proxies.
 
 ## Features
 
-- 🎵 **Broad format support** — MP3, FLAC, WAV, AAC, OGG, APE, and more, decoded via FFmpeg
-- 📝 **Rich lyrics** — LRC / QRC / YRC / TTML, word-by-word highlighting and translations, with desktop, dynamic-island, and taskbar lyric windows
-- 🌐 **Streaming servers** — Subsonic / Navidrome / Jellyfin / Emby (multi-server, auto-connect)
-- 🖥️ **Cross-platform** — Windows / macOS / Linux
-- 🎚️ **Audio spectrum** — real-time FFT visualization
-- 🏷️ **Metadata editing** — edit local track tags and cover art
-- ⬇️ **Downloads** — built-in download manager
-- 🎧 **System media integration** — Windows SMTC / Linux MPRIS / macOS Now Playing + Discord RPC
-- ⚡ **High-performance audio engine** — FFmpeg + Rust
-- 🎨 **Adaptive theming** — cover-based colors, Light / Dark / Auto
-- 📈 **Last.fm scrobbling**
+- Normal music playback, local library, streaming servers, lyrics and playlists
+- Optional campus mode with a search home, FIFO requests, duplicate detection and drag sorting
+- Weekly break schedules in Asia/Shanghai, date exceptions and automatic hard stop with queue clearing at class time
+- Isolated Bilibili browser, MV theater, fixed local Core, audio coordination and browser-data controls
+- Experimental **哔哩Song**: add the current MV page to the queue, block website continuation and advance to the next queue item
+- Independent builds and manual release downloads; official automatic updating is disabled
 
-## Development
+## Start using it
 
-### Requirements
+Open **Settings → 校园点歌** to configure campus mode, actual school times and the browser. No school timetable is preset. Enable **哔哩Song（实验性）** under the Bilibili/MV section, open a video and select **加入播放列表**.
 
-- **Node.js** >= 22
-- **pnpm** >= 10
-- **Rust toolchain** (required to build the native modules; see below)
+See [school scheduling](docs/school-scheduler.md), [Bilibili integration](docs/bilibili-integration.md), [哔哩Song](docs/bilibili-song.md) and [test evidence](docs/testing.md). Physical audio, sleep/resume and real-account checks require an interactive test machine; automated checks do not establish those results.
 
-### Native Modules
+## Development and releases
 
-Core performance features are powered by Rust-based native modules:
-
-| Module          | Description                                                                        |
-| --------------- | ---------------------------------------------------------------------------------- |
-| `audio-engine`  | High-performance audio decoding (FFmpeg), playback, FFT spectrum, cover extraction |
-| `media-ctrl`    | System media controls + Discord Rich Presence                                      |
-| `taskbar-lyric` | Native Windows taskbar lyric rendering                                             |
-
-`pnpm dev` and `pnpm build` compile the native modules automatically. To skip them (e.g. when working only on the UI), set `SKIP_NATIVE_BUILD=true`.
-
-### Getting Started
+Use Node 24.22.1, pnpm 12.15.0 and the Rust toolchain required by the native modules. Dependencies are locked. See [release maintenance](docs/releasing.md).
 
 ```bash
-# 1. Install dependencies
-pnpm install
-
-# 2. Start the dev app (builds native modules in debug, then launches Electron)
-pnpm dev
+pnpm install --frozen-lockfile
+pnpm typecheck
+pnpm lint
+pnpm test
+pnpm build:win --x64 --publish never
 ```
 
-### Building
+GitHub Actions runs the checks, builds native modules and Windows packages, launches the portable app and publishes versioned releases with source archives, provenance and SHA-256 checksums. A separate Windows workflow checks anonymous video playback with Core enabled, no-login disabled and Core disabled.
 
-```bash
-pnpm build         # Full build: clean → native → typecheck → electron-vite
+## License and attribution
 
-pnpm build:win     # Package for Windows
-pnpm build:mac     # Package for macOS
-pnpm build:linux   # Package for Linux (AppImage / deb / rpm / tar.gz / pacman)
-```
-
-> By default a build targets the current architecture only. Cross-compilation is not supported.
-
-### Other Scripts
-
-```bash
-pnpm typecheck        # tsc + vue-tsc (node + web targets)
-pnpm lint             # ESLint
-pnpm format           # Prettier
-pnpm build:native     # Build the Rust native modules only (add `--dev` for debug)
-```
-
-## Acknowledgements
-
-Special thanks to the open-source projects that make SPlayer-Next possible:
-
-- [applemusic-like-lyrics](https://github.com/Steve-xmh/applemusic-like-lyrics) — Apple Music-style lyrics display component library
-- [NeteaseCloudMusicApiEnhanced](https://github.com/neteasecloudmusicapienhanced/api-enhanced) — NetEase Cloud Music API (backup + enhanced)
-
-## License
-
-This project is licensed under the [GNU Affero General Public License v3.0 (AGPL-3.0)](https://www.gnu.org/licenses/agpl-3.0.html).
-
-- **Modification & distribution:** any modification or distribution must also be released under **AGPL-3.0**, with the complete source code provided.
-- **Derivative works:** must adopt **AGPL-3.0** as well, and must retain this project's license and copyright notice in an appropriate place.
-- **Attribution:** the original author and copyright information must be preserved. You may add your own notice for a derivative work, but you must not remove or alter the original.
-- **Commercial use:** if used for sale or any other for-profit purpose, the source code and a link to the original project must be provided. Because this project relies on third-party services, commercial use may carry legal risk.
-- **No warranty:** the software is provided "as is", without warranty of any kind, as described in the AGPL-3.0.
-
-## Disclaimer
-
-This project is intended for personal learning and research only, and must not be used for commercial or unlawful purposes. Some features rely on third-party APIs; users are solely responsible for ensuring their use complies with the relevant laws, regulations, and service agreements. The authors accept no liability for any direct or indirect consequences arising from the use of this project.
+AGPL-3.0; see [LICENSE](LICENSE) and [NOTICE](NOTICE.md). Original contributions retain their authors' copyrights. The bundled Core retains its [MIT license](vendor/bilikit/LICENSE) and [brand asset terms](vendor/bilikit/BRAND-ASSETS.md). Music, videos and platform accounts remain subject to their providers' rules.
