@@ -1,5 +1,15 @@
 # 验证记录
 
+## 2026-11-15 正式发布 v1.3.0
+
+发布源码提交：`4fd12e4d239bea630ad7d5bef6c97b44c061fe68`，标签 `v1.3.0`。
+
+[GitHub Actions 发布流程](https://github.com/DGHH-Skywalker/CPlayer/actions/runs/43692788842) 全部成功：版本校验、4 项发布附件工具测试、类型检查、Lint、53 项 Node / 636 项 Web 测试、文档构建、Electron 注入及 DPI、Windows 原生模块、正式安装/便携包和实际便携程序启动验收。
+
+[正式 Release](https://github.com/DGHH-Skywalker/CPlayer/releases/tag/v1.3.0) 已公开，附安装包、便携版、对应源码、归属许可、构建来源、验收 JSON 和 SHA256SUMS.txt。附件来源核对到同一个标签提交，不使用上一轮程序替代。
+
+中国大陆下载代理的安装包和便携版已实际整文件下载，并与 GitHub 原始附件摘要核对一致。地址、文件大小及摘要见 [本版本发布记录](releases/v1.3.0.md)。测试来自当前执行环境，第三方代理在各大陆网络下的可用性可能不同。实体设备与账号的未验证项继续保留。
+
 ## 2026-11-14 继续验收与哔哩Song
 
 本轮新增默认关闭的哔哩Song，具体入口和行为见 bilibili-song.md。自动测试覆盖规范 URL、分 P 标识、重复结束、队尾停止、课间截止、旧页面状态、取消尚未开始的 MV；真实 Chromium 使用受控媒体自然结束验证站点续播和分 P 跳转被阻止。Core 增加根节点等待后仍在首个页面脚本之前运行，修复主题模块访问空 documentElement。
