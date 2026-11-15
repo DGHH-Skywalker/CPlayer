@@ -2,6 +2,12 @@
 
 ## 2026-11-15 v1.3.1 哔哩Song 页面与结束交接
 
+[正式 Release](https://github.com/DGHH-Skywalker/CPlayer/releases/tag/v1.3.1) 已发布。[Windows 发布流程](https://github.com/DGHH-Skywalker/CPlayer/actions/runs/43771006387) prepare、windows、publish 均 success：类型、Lint、Node 53 / Web 641 项测试、文档、Electron、125% / 150% DPI、原生模块、安装包/便携版和实际程序验收完成。公开 acceptance-result.json 记录 `bilibiliLayout=true`、`floatingSongButton=true`、`classGate=true`。
+
+安装包与便携版已从 gh-proxy.org 逐字节完整下载，分别为 122452731 与 110836657 字节；摘要与 GitHub 原始附件 API 和 Release 的 SHA256SUMS.txt 均一致。源码、许可、来源和验收 JSON 也已下载核验；正式程序及源码均来自下方标签提交。安装包 SHA-256：`29f47dcc59f1ebf63a979d034f7091d0b31d97f30b61d2b18b13b7d836bb9dee`；便携版：`60095be44b384b3fa1f34095463c3a0389c8131a54f41fc6dab3ad3c25b2f473`。第三方代理在各大陆网络下的实际可用性可能不同。
+
+Windows runner 没有音频输出端点，验收 JSON 已明确记录 nativeAudio.verified=false。实体扬声器截止、真实休眠唤醒、账号与多显示器交互仍需对应设备，不由本次自动验证替代。
+
 源码提交：`da33063e4f8881095c2fddec5bcd0ec992469e1d`，标签 `v1.3.1`。
 
 本地 Node 53 项、Web 82 文件 641 项、TypeScript 与 ESLint 已通过。Electron 44 受控媒体覆盖自然结束、window 捕获监听顺序、站点反复开启 loop、片尾重建和中途重建；结束仅上报一次且拒绝站点再次播放。原生悬浮按钮覆盖本地视图层级、DOM 点击无法触发入队、真实输入、上课禁用及 100% / 125% / 150% 应用缩放。新增几何单测覆盖底栏入场动画、浮动播放栏及窄窗口裁剪。
@@ -10,7 +16,15 @@
 
 内存比较采用同一受控文档、可见窗口和 Core，启动后 60 秒读取 app.getAppMetrics 的进程工作集总和：改动前 433868 KiB，显示新悬浮控件后 528356 KiB，增加约 92.3 MiB。该代价来自独立的本地原生视图进程，目的是在远程 WebContentsView 上安全显示控件；它不加载 Vue、preload 或应用 IPC，实验功能关闭、页面隐藏或窗口最小化时立即销毁。此数据不是完整应用或长期性能基准。
 
-Windows 发布与实际程序几何检查：[Actions](https://github.com/DGHH-Skywalker/CPlayer/actions/runs/43771006387)。Windows 三模式真实网站与片尾检查：[Actions](https://github.com/DGHH-Skywalker/CPlayer/actions/runs/43771011330)。下方历史记录保留原始环境与当时的限制，不代表本轮重新出现同样问题。
+Windows 发布与实际程序几何检查：[Actions](https://github.com/DGHH-Skywalker/CPlayer/actions/runs/43771006387)。Windows 三模式真实网站与片尾检查：[最终成功 Actions](https://github.com/DGHH-Skywalker/CPlayer/actions/runs/43771715229)，验收提交 `2062625a` 与发布标签的产品代码相同，仅改进测试取样和文档。首次运行 Core 关闭组在站点重建播放器时过早取样失败；改为连续三次稳定播放后，三组均通过。下方历史记录保留原始环境与当时的限制，不代表本轮重新出现同样问题。
+
+| Windows 模式    | 实际解码  | 播放进度    | 片尾事件 | 等待 6.5 秒后的状态    |
+| --------------- | --------- | ----------- | -------- | ---------------------- |
+| Core + no-login | 1920×1080 | 2.46084 秒  | 1 次     | 暂停、已结束、同一视频 |
+| Core、关闭增强  | 640×360   | 2.49407 秒  | 1 次     | 暂停、已结束、同一视频 |
+| 关闭 Core       | 853×480   | 2.804493 秒 | 1 次     | 暂停、已结束、同一视频 |
+
+三组均为匿名全新 Session，readyState=4、SESSDATA 不存在、远程 require 不可用；跳至片尾后的 currentTime 与 duration 均为 973.6 秒。真实网站验收包含站点重建和 /en/video 导航，当前网页解码结果不代表所有内容的清晰度保证。
 
 ## 2026-11-15 正式发布 v1.3.0
 
