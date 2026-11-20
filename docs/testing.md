@@ -2,13 +2,29 @@
 
 ## 2026-11-20 v1.3.2 搜索失焦
 
-基线为 `ed2ab448`，开发分支 `fix/bilibili-search-focus`。Node 53 项、Web 83 文件 646 项、TypeScript、ESLint 和 4 项发布工具测试通过。新增 5 项 Vue 回归覆盖弹窗仅遮挡、普通失焦、带弹窗离开、窗口隐藏/全屏和迟到 IPC；真实 Electron 44 验证网页失焦、文档仍可见、播放进度从 0.093433 秒推进至 0.698762 秒，以及关闭遮挡后保留手动暂停，既有片尾/循环/重建、原生按钮和会话隔离检查同样通过。
+[正式 Release](https://github.com/DGHH-Skywalker/CPlayer/releases/tag/v1.3.2) 已公开。[发布工作流](https://github.com/DGHH-Skywalker/CPlayer/actions/runs/44677415052) 的 prepare、Windows 与 publish 全部 success，包括类型、Lint、全量测试、文档、Electron 与 DPI、原生模块、打包和实际便携版启动。公开验收 JSON 记录 `searchFocusPlayback=true`、`overlayClassGate=true`，既有 `bilibiliLayout`、`floatingSongButton`、`classGate` 均 true。
+
+安装包（122452939 字节）和便携版（110835944 字节）已通过 gh-proxy.org 完整下载，分别核对 GitHub 原始附件摘要及 SHA256SUMS.txt。源码、许可、来源和验收 JSON 同样下载并通过摘要检查，来源确认到本版产品提交。安装包 SHA-256：`3cbb392eae6adfae2d9688dc7ccf08576900ac4da7a684f6a33732faaa88a2f6`；便携版：`fd6b8764ec0355b082a1ba61225a5fe95f8a5767d1fb8507eac75c2e6866184a`。第三方代理未模拟所有大陆网络条件。
+
+Windows runner 没有实体音频输出端点，nativeAudio.verified=false，仍不能替代实体扬声器、真实休眠唤醒和账号现场验收。
+
+产品源码为 `d2887edc6dce819dc6ea5d7a51f38421510433da`，标签 `v1.3.2`。基线为 `ed2ab448`，开发分支 `fix/bilibili-search-focus`。Node 53 项、Web 83 文件 646 项、TypeScript、ESLint 和 4 项发布工具测试通过。新增 5 项 Vue 回归覆盖弹窗仅遮挡、普通失焦、带弹窗离开、窗口隐藏/全屏和迟到 IPC；真实 Electron 44 验证网页失焦、文档仍可见、播放进度从 0.093433 秒推进至 0.698762 秒，以及关闭遮挡后保留手动暂停，既有片尾/循环/重建、原生按钮和会话隔离检查同样通过。
 
 04:51:45 UTC，匿名真实 B 站样本 BV1Y6We6jEPQ 在 Core/no-login 开启时解码 1920×1080、readyState=4。搜索焦点转移且原生画面缩为零后，document.hasFocus=false、visibilityState=visible、paused=false，进度从 8.556696 秒推进至 9.507432 秒。随后片尾检查只报告一次结束，最终 paused=true、ended=true、currentTime=duration=973.6 秒，没有跳转下一视频。
 
 按相同受控文档、Core 和媒体测量启动 60 秒的进程工作集：旧行为（弹窗时暂停并隐藏）557156 KiB，新行为（弹窗只遮住画面、媒体继续）561524 KiB，增加 4368 KiB，约 4.3 MiB。两次均移除悬浮按钮以复现弹窗让位场景；改后样本实际保持播放，改前已暂停。这是该场景的受控样本，不能作为完整应用或长期性能保证。
 
 Windows 实际便携版验收增加打开顶部搜索弹窗、聚焦其输入框、网页内受控媒体保持播放，关闭弹窗保留手动暂停，页面离开暂停，以及遮挡期间上课暂停。详细程序结果以本版发布流程的 acceptance-result.json 为准；实体音频、睡眠与账号现场限制继续保留。
+
+[Windows 三模式真实站点验收](https://github.com/DGHH-Skywalker/CPlayer/actions/runs/44677419638) 全部 success，与产品标签为同一提交。各组均为匿名、readyState=4、远程 require 不可用，搜索焦点转移后 paused=false、visibilityState=visible、hasFocus=false，进度实际推进；随后的片尾只报告一次结束，等待 6.5 秒仍暂停在当前视频。
+
+| Windows 模式    | 实际视频  | 失焦前进度  | 失焦后进度  |
+| --------------- | --------- | ----------- | ----------- |
+| Core + no-login | 1920×1080 | 3.064246 秒 | 4.069841 秒 |
+| Core、关闭增强  | 640×360   | 2.722086 秒 | 3.727366 秒 |
+| 关闭 Core       | 640×360   | 1.361592 秒 | 2.365375 秒 |
+
+[Windows 正式构建与程序验收](https://github.com/DGHH-Skywalker/CPlayer/actions/runs/44677415052) 在对应标签执行，不使用旧版本程序代替。
 
 ## 2026-11-15 v1.3.1 哔哩Song 页面与结束交接
 
