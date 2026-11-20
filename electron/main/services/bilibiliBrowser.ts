@@ -26,6 +26,7 @@ let view: WebContentsView | null = null;
 let loader: BilikitLoader | null = null;
 let temporaryDisabled = false;
 let visible = false;
+let occluded = false;
 let locked = false;
 let creating: Promise<void> | null = null;
 let lastConfig = "";
@@ -61,6 +62,7 @@ export const getBilibiliState = (): BilibiliState => ({
   canGoBack: view?.webContents.navigationHistory.canGoBack() ?? false,
   canGoForward: view?.webContents.navigationHistory.canGoForward() ?? false,
   visible,
+  occluded,
   mediaPlaying,
   temporaryDisabled,
   coreLoaded: loader?.loaded ?? false,
@@ -82,6 +84,7 @@ const updateSongButton = (): void => {
   const main = getMainWindow();
   if (
     !visible ||
+    occluded ||
     !store.get("school.bilibili.biliSongEnabled") ||
     !main?.isVisible() ||
     main.isMinimized()
@@ -93,7 +96,7 @@ const updateSongButton = (): void => {
   if (!songButton)
     songButton = new BilibiliSongButton(main, () => {
       try {
-        if (!visible || locked || !schoolAllowsPlayback()) return;
+        if (!visible || occluded || locked || !schoolAllowsPlayback()) return;
         sendToMain("bilibili:request", { track: currentBilibiliSong() });
       } catch (error) {
         sendToMain("bilibili:request", { error: String(error) });
@@ -286,6 +289,21 @@ const pauseMedia = async (): Promise<void> => {
   );
 };
 
+/** 弹窗遮挡期间保留文档可见性，避免站点因 visibilitychange 自动暂停 */
+const applyViewBounds = (): void => {
+  if (!view) return;
+  const main = getMainWindow()!;
+  const keepDocumentVisible = visible && occluded && main.isVisible() && !main.isMinimized();
+  if (keepDocumentVisible) view.webContents.setBackgroundThrottling(false);
+  if (occluded) view.setBounds({ x: bounds.x, y: bounds.y, width: 0, height: 0 });
+  else if (htmlFullscreen) {
+    const [width, height] = main.getContentSize();
+    view.setBounds({ x: 0, y: 0, width, height });
+  } else view.setBounds(bounds);
+  // 先恢复画面再启用节流，防止退出弹窗的瞬间产生隐藏事件
+  if (!keepDocumentVisible) view.webContents.setBackgroundThrottling(true);
+};
+
 /** 更新剧场样式，使用原生网页播放器和弹幕 */
 const applyTheater = async (): Promise<void> => {
   if (!view) return;
@@ -334,13 +352,19 @@ const create = async (): Promise<void> => {
         .replace(/\s(?:Electron|Cplayer|carbonv_player|CarbonVPlayer)\/[^\s]+/gi, ""),
     );
     main.contentView.addChildView(view);
+    /** 窗口真正隐藏时恢复节流并暂停媒体，弹窗状态不能绕过此操作 */
     const onHidden = (): void => {
+      wc.setBackgroundThrottling(true);
       updateSongButton();
       if (biliSongTransport.current)
         void controlBilibiliSong("pause", biliSongTransport.current.token);
       else void pauseMedia();
     };
-    const onShown = (): void => updateSongButton();
+    /** 窗口恢复时重算原生画面，只调整显示而不主动恢复播放 */
+    const onShown = (): void => {
+      applyViewBounds();
+      updateSongButton();
+    };
     const onClosed = (): void => destroy();
     main.on("hide", onHidden);
     main.on("minimize", onHidden);
@@ -438,14 +462,12 @@ const create = async (): Promise<void> => {
     });
     wc.on("enter-html-full-screen", () => {
       htmlFullscreen = true;
-      if (!view) return;
-      const [width, height] = main.getContentSize();
-      view.setBounds({ x: 0, y: 0, width, height });
+      applyViewBounds();
       updateSongButton();
     });
     wc.on("leave-html-full-screen", () => {
       htmlFullscreen = false;
-      view?.setBounds(bounds);
+      applyViewBounds();
       updateSongButton();
     });
     wc.on("media-started-playing", () => {
@@ -533,6 +555,7 @@ const destroy = (): void => {
     view = null;
   }
   visible = false;
+  occluded = false;
   mediaPlaying = false;
 };
 
@@ -604,7 +627,9 @@ export const bilibiliCommand = async (command: string, value?: unknown): Promise
   if (command === "hide") {
     visibilityGeneration++;
     visible = false;
+    occluded = false;
     view?.setVisible(false);
+    view?.webContents.setBackgroundThrottling(true);
     updateSongButton();
     await pauseMedia();
     if (biliSongTransport.current)
@@ -625,8 +650,11 @@ export const bilibiliCommand = async (command: string, value?: unknown): Promise
     await controlBilibiliSong("stop", biliSongTransport.current.token);
   switch (command) {
     case "show":
+    case "occlude":
       if (visibilityToken !== visibilityGeneration) break;
       visible = true;
+      occluded = command === "occlude";
+      applyViewBounds();
       view!.setVisible(true);
       break;
     case "bounds": {
@@ -642,7 +670,7 @@ export const bilibiliCommand = async (command: string, value?: unknown): Promise
       const zoom = main.webContents.getZoomFactor();
       const [width, height] = main.getContentSize();
       bounds = bilibiliBounds(b, zoom, [width, height]);
-      view!.setBounds(htmlFullscreen ? { x: 0, y: 0, width, height } : bounds);
+      applyViewBounds();
       break;
     }
     case "navigate":

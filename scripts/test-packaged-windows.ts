@@ -21,16 +21,21 @@ import { setTimeout as delay } from "node:timers/promises";
 
 /**
  * 连接实际便携版的本地调试端口
+ * @param kind - 主应用或独立 B 站页面
  * @returns 主应用页面调试目标
  */
-const waitForPage = async (): Promise<DebugTarget> => {
+const waitForPage = async (kind: "main" | "bilibili" = "main"): Promise<DebugTarget> => {
   for (let attempt = 0; attempt < 120; attempt++) {
     try {
       const targets = (await fetch("http://127.0.0.1:9333/json/list", {
         signal: AbortSignal.timeout(1000),
       }).then((response) => response.json())) as DebugTarget[];
       const page = targets.find(
-        (target) => target.type === "page" && target.url.startsWith("file:"),
+        (target) =>
+          target.type === "page" &&
+          (kind === "main"
+            ? target.url.startsWith("file:")
+            : target.url.startsWith("https://search.bilibili.com/")),
       );
       if (page) return page;
     } catch {
@@ -122,6 +127,7 @@ const appProcess = spawn(resolve("dist", portable), ["--remote-debugging-port=93
   stdio: ["ignore", logFile.fd, logFile.fd],
 });
 let client: DebugClient | undefined;
+let browserClient: DebugClient | undefined;
 let nativeAudio: { verified: boolean; reason?: string } = {
   verified: false,
   reason: "尚未检查输出设备",
@@ -241,6 +247,116 @@ try {
   assert.equal(layout.addressBars, 0);
   assert.deepEqual(layout.toolbar, ["刷新", "复制链接", "MV 剧场模式", "全屏"]);
   await writeFile("dist/bilibili-layout.json", JSON.stringify(layout, null, 2));
+  const remotePage = await waitForPage("bilibili");
+  browserClient = await connect(remotePage.webSocketDebuggerUrl);
+  const focusTone = Buffer.alloc(44 + 8000 * 10 * 2);
+  focusTone.write("RIFF");
+  focusTone.writeUInt32LE(focusTone.length - 8, 4);
+  focusTone.write("WAVEfmt ", 8);
+  focusTone.writeUInt32LE(16, 16);
+  focusTone.writeUInt16LE(1, 20);
+  focusTone.writeUInt16LE(1, 22);
+  focusTone.writeUInt32LE(8000, 24);
+  focusTone.writeUInt32LE(16000, 28);
+  focusTone.writeUInt16LE(2, 32);
+  focusTone.writeUInt16LE(16, 34);
+  focusTone.write("data", 36);
+  focusTone.writeUInt32LE(focusTone.length - 44, 40);
+  await evaluate(
+    browserClient,
+    `(async () => {
+    const media = new Audio('data:audio/wav;base64,${focusTone.toString("base64")}');
+    media.muted = true;
+    media.loop = true;
+    document.body.appendChild(media);
+    window.__carbonvFocusTestMedia = media;
+    await media.play();
+  })()`,
+  );
+  await delay(300);
+  const startTime = await evaluate<number>(
+    browserClient,
+    "window.__carbonvFocusTestMedia.currentTime",
+  );
+  const focus = await evaluate<BilibiliState & { inputFocused: boolean }>(
+    client,
+    `(async () => {
+    document.querySelector('header [role="button"][aria-label]').click();
+    await new Promise(done=>setTimeout(done,650));
+    const input = document.querySelector('[role="dialog"] input');
+    input?.focus();
+    return {...await window.api.bilibili.command('status'),inputFocused:!!input && document.activeElement===input};
+  })()`,
+  );
+  const playing = await evaluate<{ paused: boolean; time: number; visibility: string }>(
+    browserClient,
+    "({paused:window.__carbonvFocusTestMedia.paused,time:window.__carbonvFocusTestMedia.currentTime,visibility:document.visibilityState})",
+  );
+  assert.equal(focus.inputFocused, true);
+  assert.equal(focus.visible, true);
+  assert.equal(focus.occluded, true);
+  assert.equal(focus.bounds.width, 0);
+  assert.equal(focus.bounds.height, 0);
+  assert.equal(focus.buttonBounds, null);
+  assert.equal(playing.paused, false, "点击搜索框暂停了 B 站媒体");
+  assert.ok(playing.time > startTime + 0.2, "搜索期间媒体进度未继续");
+  assert.equal(playing.visibility, "visible");
+  await evaluate(browserClient, "window.__carbonvFocusTestMedia.pause()");
+  const restored = await evaluate<BilibiliState>(
+    client,
+    `(async () => {
+    document.getElementById('app').__vue_app__.config.globalProperties.$pinia._s.get('status').searchOpen = false;
+    await new Promise(done=>setTimeout(done,650));
+    return window.api.bilibili.command('status');
+  })()`,
+  );
+  assert.equal(restored.occluded, false);
+  assert.ok(restored.bounds.height > 0);
+  assert.equal(
+    await evaluate(browserClient, "window.__carbonvFocusTestMedia.paused"),
+    true,
+    "关闭弹窗恢复了手动暂停的媒体",
+  );
+  await evaluate(browserClient, "window.__carbonvFocusTestMedia.play()");
+  await evaluate(
+    client,
+    `(async () => {
+    await document.getElementById('app').__vue_app__.config.globalProperties.$router.push('/');
+    await new Promise(done=>setTimeout(done,300));
+  })()`,
+  );
+  assert.equal(
+    await evaluate(browserClient, "window.__carbonvFocusTestMedia.paused"),
+    true,
+    "离开页面没有暂停媒体",
+  );
+  await evaluate(
+    client,
+    `(async () => {
+    await document.getElementById('app').__vue_app__.config.globalProperties.$router.push('/bilibili');
+    await new Promise(done=>setTimeout(done,650));
+    document.querySelector('header [role="button"][aria-label]').click();
+    await new Promise(done=>setTimeout(done,300));
+  })()`,
+  );
+  await evaluate(browserClient, "window.__carbonvFocusTestMedia.play()");
+  await evaluate(
+    client,
+    `(async () => {
+    const snapshot = await window.api.school.get();
+    await window.api.school.configure({...snapshot.config,enabled:true,scheduleEnabled:true,breaks:[],specialDates:{},disabledDates:[]});
+    await new Promise(done=>setTimeout(done,300));
+  })()`,
+  );
+  assert.equal(
+    await evaluate(browserClient, "window.__carbonvFocusTestMedia.paused"),
+    true,
+    "弹窗遮挡时上课未暂停媒体",
+  );
+  await writeFile(
+    "dist/bilibili-focus.json",
+    JSON.stringify({ focus, playing, restored, routePause: true, classPause: true }, null, 2),
+  );
   const verdict = JSON.stringify({
     success: true,
     portable,
@@ -251,6 +367,8 @@ try {
     nativeAudio,
     bilibiliLayout: true,
     floatingSongButton: true,
+    searchFocusPlayback: true,
+    overlayClassGate: true,
   });
   console.log(verdict);
   await writeFile("dist/acceptance-result.json", verdict + "\n");
@@ -261,6 +379,7 @@ try {
   throw error;
 } finally {
   client?.socket.close();
+  browserClient?.socket.close();
   if (appProcess.pid)
     spawnSync("taskkill", ["/PID", String(appProcess.pid), "/T", "/F"], { stdio: "ignore" });
   await logFile.close();

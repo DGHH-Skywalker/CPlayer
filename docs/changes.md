@@ -1,5 +1,11 @@
 # Cplayer 修改记录
 
+## 2026-11-20 v1.3.2 搜索失焦修复
+
+- Bilibili.vue 将临时弹窗遮挡与页面退出分开，使用 occlude 保持媒体播放，布局 revision 拒绝迟到的显示任务
+- bilibiliBrowser.ts 维护临时遮挡状态；仅在可见窗口的弹窗期间保持网页文档可见，恢复画面后启用默认节流；真正隐藏和上课仍暂停
+- 新增 5 项页面回归，Electron、真实 B 站和 Windows 实际便携版增加搜索失焦、手动暂停、页面离开及遮挡期间上课检查
+
 ## 2026-11-15 v1.3.1 哔哩Song 修复
 
 - `shared/constants/bilibili.ts`：统一搜索首页，浏览器创建与清理后均打开 search.bilibili.com

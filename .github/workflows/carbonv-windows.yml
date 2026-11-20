@@ -96,6 +96,7 @@ jobs:
             dist/portable-smoke.log
             dist/acceptance-result.json
             dist/bilibili-layout.json
+            dist/bilibili-focus.json
             dist/build-provenance.json
             docs/testing.md
             vendor/bilikit/manifest.json

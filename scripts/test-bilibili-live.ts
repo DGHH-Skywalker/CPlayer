@@ -14,6 +14,7 @@ const run = async (): Promise<void> => {
   const dedicated = session.fromPartition(`carbonv-live-${Date.now()}`);
   if (process.env.HTTPS_PROXY) await dedicated.setProxy({ proxyRules: process.env.HTTPS_PROXY });
   const main = new BrowserWindow({ show: true, width: 1280, height: 800 });
+  await main.loadURL("data:text/html,<input aria-label='搜索'>");
   const view = new WebContentsView({
     webPreferences: {
       session: dedicated,
@@ -101,6 +102,27 @@ const run = async (): Promise<void> => {
       result.videos.some((v: { height: number }) => v.height >= 1080),
       "所测视频没有达到 1080P",
     );
+  // 使用相同的原生遮挡操作验证真实站点不会因搜索焦点转移暂停
+  const beforeFocus = await wc.executeJavaScript("document.querySelector('video').currentTime");
+  wc.setBackgroundThrottling(false);
+  view.setBounds({ x: 0, y: 0, width: 0, height: 0 });
+  main.webContents.focus();
+  await main.webContents.executeJavaScript("document.querySelector('input').focus()");
+  await new Promise((done) => setTimeout(done, 1000));
+  const focus = await wc.executeJavaScript(
+    "({paused:document.querySelector('video').paused,time:document.querySelector('video').currentTime,visibility:document.visibilityState,focused:document.hasFocus()})",
+  );
+  await writeFile(
+    "test-results/bilibili-focus.json",
+    JSON.stringify({ core, noLogin, beforeFocus, ...focus }, null, 2),
+  );
+  console.log(JSON.stringify({ focus, beforeFocus, core, noLogin }));
+  assert.equal(focus.paused, false, "真实 B 站在搜索焦点转移后暂停");
+  assert.equal(focus.visibility, "visible");
+  assert.equal(focus.focused, false);
+  assert.ok(focus.time > beforeFocus + 0.2, "搜索期间真实视频进度未继续");
+  view.setBounds({ x: 0, y: 0, width: 1280, height: 800 });
+  wc.setBackgroundThrottling(true);
   if (ending) {
     await wc.executeJavaScript(
       `(() => {

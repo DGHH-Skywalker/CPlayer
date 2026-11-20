@@ -13,7 +13,7 @@ Use the Windows x64 **setup** installer or single-file **portable** EXE from [Gi
 - Normal music playback, local library, streaming servers, lyrics and playlists
 - Optional campus mode with a search home, FIFO requests, duplicate detection and drag sorting
 - Weekly break schedules in Asia/Shanghai, date exceptions and automatic hard stop with queue clearing at class time
-- Isolated Bilibili browser, MV theater, fixed local Core, audio coordination and browser-data controls
+- Isolated Bilibili browser, MV theater, fixed local Core, audio coordination and browser-data controls; opening the app search dialog or moving focus keeps video playback running
 - Experimental **哔哩Song**: add the current MV page to the queue, block website continuation and advance to the next queue item
 - Independent builds and manual release downloads; official automatic updating is disabled
 

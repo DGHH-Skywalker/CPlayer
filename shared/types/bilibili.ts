@@ -19,6 +19,8 @@ export interface BilibiliState {
   canGoBack: boolean;
   canGoForward: boolean;
   visible: boolean;
+  /** 页面仍在使用，但画面因应用弹窗暂时让位 */
+  occluded: boolean;
   mediaPlaying: boolean;
   temporaryDisabled: boolean;
   coreLoaded: boolean;

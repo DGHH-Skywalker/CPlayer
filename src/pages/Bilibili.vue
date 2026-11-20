@@ -18,7 +18,8 @@ let unsubscribeRequest: (() => void) | undefined;
 let observer: MutationObserver | undefined;
 let frame = 0;
 let disposed = false;
-let currentlyVisible = false;
+let display: "hidden" | "visible" | "occluded" = "hidden";
+let layoutRevision = 0;
 /** 将当前视频作为独立队列项追加，校园模式遵守课间闸门 */
 const addSong = (track: Track): void => {
   try {
@@ -44,20 +45,17 @@ const command = async (name: string, value?: unknown): Promise<void> => {
     error.value = String(e);
   }
 };
-/** 原生视图使用真实布局边界，弹窗和全屏音乐播放器出现时隐藏 */
+/** 搜索等弹窗仅遮住画面，离开页面或窗口隐藏才暂停媒体 */
 const syncBounds = async (): Promise<void> => {
   if (disposed || !surface.value) return;
+  const revision = ++layoutRevision;
   const overlay = [
     ...document.querySelectorAll('[role="dialog"], [role="alertdialog"], [role="menu"]'),
   ].some((el) => el.getClientRects().length > 0);
-  const show =
-    route.path === "/bilibili" &&
-    !document.hidden &&
-    !overlay &&
-    !useStatusStore().isPlayerExpanded;
+  const show = route.path === "/bilibili" && !document.hidden && !useStatusStore().isPlayerExpanded;
   if (!show) {
-    if (currentlyVisible) {
-      currentlyVisible = false;
+    if (display !== "hidden") {
+      display = "hidden";
       await command("hide");
     }
     return;
@@ -72,10 +70,11 @@ const syncBounds = async (): Promise<void> => {
     footer?.getBoundingClientRect(),
   );
   await command("bounds", clipped);
-  if (disposed) return;
-  if (!currentlyVisible) {
-    currentlyVisible = true;
-    await command("show");
+  if (disposed || revision !== layoutRevision) return;
+  const next = overlay ? "occluded" : "visible";
+  if (display !== next) {
+    display = next;
+    await command(overlay ? "occlude" : "show");
   }
 };
 /** 将布局变化合并到一次动画帧，隐藏时不持续运行 */
@@ -98,8 +97,8 @@ onMounted(async () => {
   });
   unsubscribe = window.api.bilibili.onState((value) => {
     state.value = value;
-    if (!value.visible && currentlyVisible) {
-      currentlyVisible = false;
+    if (!value.visible && display !== "hidden") {
+      display = "hidden";
       scheduleBounds();
     }
   });

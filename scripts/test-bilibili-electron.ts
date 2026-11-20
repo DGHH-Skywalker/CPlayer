@@ -27,8 +27,8 @@ const run = async (): Promise<void> => {
   });
   await dedicated.protocol.handle("https", (request) => {
     const url = new URL(request.url);
-    if (url.pathname === "/tone.wav") {
-      const frames = 8000;
+    if (["/tone.wav", "/focus.wav"].includes(url.pathname)) {
+      const frames = url.pathname === "/focus.wav" ? 80000 : 8000;
       const wav = Buffer.alloc(44 + frames * 2);
       wav.write("RIFF");
       wav.writeUInt32LE(wav.length - 8, 4);
@@ -44,6 +44,11 @@ const run = async (): Promise<void> => {
       wav.writeUInt32LE(frames * 2, 40);
       return new Response(wav, { headers: { "content-type": "audio/wav" } });
     }
+    if (url.pathname === "/focus")
+      return new Response(
+        `<!doctype html><video src="/focus.wav" autoplay muted loop></video><script>document.addEventListener('visibilitychange',()=>{if(document.hidden)document.querySelector('video').pause()})</script>`,
+        { headers: { "content-type": "text/html" } },
+      );
     if (url.pathname.startsWith("/video/"))
       return new Response(
         `<!doctype html><video id="mv" src="/tone.wav" muted loop></video><script>
@@ -73,7 +78,7 @@ const run = async (): Promise<void> => {
   });
   const window = new BrowserWindow({ show: false, width: 1100, height: 760 });
   await window.loadURL(
-    "data:text/html,<style>body{margin:0;background:rgb(18,24,36)}</style><footer style='position:fixed;bottom:0;height:80px;width:100%;background:rgb(60,90,160)'>Cplayer player controls</footer>",
+    "data:text/html,<style>body{margin:0;background:rgb(18,24,36)}</style><input aria-label='搜索'><footer style='position:fixed;bottom:0;height:80px;width:100%;background:rgb(60,90,160)'>Cplayer player controls</footer>",
   );
   const view = new WebContentsView({
     webPreferences: {
@@ -150,6 +155,30 @@ const run = async (): Promise<void> => {
   };
   window.show();
   wc.focus();
+  // 弹窗只遮住画面，焦点转移与零尺寸都不能让站点收到隐藏或暂停
+  await loader.install(false, false);
+  await wc.loadURL("https://www.bilibili.com/focus");
+  await wc.executeJavaScript("document.querySelector('video').play()", true);
+  await new Promise((done) => setTimeout(done, 200));
+  const beforeFocus = await wc.executeJavaScript("document.querySelector('video').currentTime");
+  wc.setBackgroundThrottling(false);
+  view.setBounds({ x: 200, y: 100, width: 0, height: 0 });
+  window.webContents.focus();
+  await window.webContents.executeJavaScript("document.querySelector('input').focus()");
+  await new Promise((done) => setTimeout(done, 600));
+  const afterFocus = await wc.executeJavaScript(
+    "({paused:document.querySelector('video').paused,time:document.querySelector('video').currentTime,visibility:document.visibilityState,focused:document.hasFocus()})",
+  );
+  console.log("搜索遮挡后的实际媒体状态", { beforeFocus, afterFocus });
+  assert.equal(afterFocus.paused, false);
+  assert.equal(afterFocus.visibility, "visible");
+  assert.equal(afterFocus.focused, false);
+  assert.ok(afterFocus.time > beforeFocus + 0.2);
+  await wc.executeJavaScript("document.querySelector('video').pause()");
+  view.setBounds({ x: 200, y: 100, width: 800, height: 500 });
+  wc.setBackgroundThrottling(true);
+  assert.equal(await wc.executeJavaScript("document.querySelector('video').paused"), true);
+  console.log("搜索焦点、弹窗遮挡时持续播放与手动暂停验证通过");
   // 原生结束、window 捕获抢占、循环和结束前播放器重建均必须只推进一次
   for (const mode of ["", "late-rebuild", "early-rebuild"]) {
     songEvents.length = 0;

@@ -1,5 +1,15 @@
 # 验证记录
 
+## 2026-11-20 v1.3.2 搜索失焦
+
+基线为 `ed2ab448`，开发分支 `fix/bilibili-search-focus`。Node 53 项、Web 83 文件 646 项、TypeScript、ESLint 和 4 项发布工具测试通过。新增 5 项 Vue 回归覆盖弹窗仅遮挡、普通失焦、带弹窗离开、窗口隐藏/全屏和迟到 IPC；真实 Electron 44 验证网页失焦、文档仍可见、播放进度从 0.093433 秒推进至 0.698762 秒，以及关闭遮挡后保留手动暂停，既有片尾/循环/重建、原生按钮和会话隔离检查同样通过。
+
+04:51:45 UTC，匿名真实 B 站样本 BV1Y6We6jEPQ 在 Core/no-login 开启时解码 1920×1080、readyState=4。搜索焦点转移且原生画面缩为零后，document.hasFocus=false、visibilityState=visible、paused=false，进度从 8.556696 秒推进至 9.507432 秒。随后片尾检查只报告一次结束，最终 paused=true、ended=true、currentTime=duration=973.6 秒，没有跳转下一视频。
+
+按相同受控文档、Core 和媒体测量启动 60 秒的进程工作集：旧行为（弹窗时暂停并隐藏）557156 KiB，新行为（弹窗只遮住画面、媒体继续）561524 KiB，增加 4368 KiB，约 4.3 MiB。两次均移除悬浮按钮以复现弹窗让位场景；改后样本实际保持播放，改前已暂停。这是该场景的受控样本，不能作为完整应用或长期性能保证。
+
+Windows 实际便携版验收增加打开顶部搜索弹窗、聚焦其输入框、网页内受控媒体保持播放，关闭弹窗保留手动暂停，页面离开暂停，以及遮挡期间上课暂停。详细程序结果以本版发布流程的 acceptance-result.json 为准；实体音频、睡眠与账号现场限制继续保留。
+
 ## 2026-11-15 v1.3.1 哔哩Song 页面与结束交接
 
 [正式 Release](https://github.com/DGHH-Skywalker/CPlayer/releases/tag/v1.3.1) 已发布。[Windows 发布流程](https://github.com/DGHH-Skywalker/CPlayer/actions/runs/43771006387) prepare、windows、publish 均 success：类型、Lint、Node 53 / Web 641 项测试、文档、Electron、125% / 150% DPI、原生模块、安装包/便携版和实际程序验收完成。公开 acceptance-result.json 记录 `bilibiliLayout=true`、`floatingSongButton=true`、`classGate=true`。
