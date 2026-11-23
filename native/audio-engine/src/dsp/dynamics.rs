@@ -53,7 +53,7 @@ impl OutputDynamics {
                 enabled: word & 1 != 0,
                 dynamic: word & 2 != 0,
                 strength: ((word >> 2) & 0xffff) as f32 / 100.0,
-                ceiling_db: -((word >> 18) & 0xffff) as f32 / 100.0,
+                ceiling_db: -(((word >> 18) & 0xffff) as f32) / 100.0,
             });
         }
     }
