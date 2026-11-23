@@ -215,3 +215,5 @@ Windows 首屏模块验证使用 CDP `Debugger.scriptParsed` 捕获实际解析�
 Windows 真实 B 站三模式运行 [45149449539](https://github.com/DGHH-Skywalker/CPlayer/actions/runs/45149449539) 全部通过：Core+no-login 为 1920×1080，关闭增强或关闭Core为640×360；三模式 NoiseLimiter 图均 running/active、非零输出不超过 −12 dBFS，失焦继续播放，片尾唯一 ended 并保持暂停。
 
 最终本地故障集成：105 文件 / 733 项 Web 测试、53 项 Node 测试、7 项可移植/原生适配器 Rust 测试、类型与零警告 Lint 通过。补充CDP attach/register/detach失效的主进程静音门控，不将Core关闭当作保护失败。暂停后挂起浏览器音效上下文，恢复播放再运行，避免后台持续处理静音。Windows候选构建 [45201141348](https://github.com/DGHH-Skywalker/CPlayer/actions/runs/45201141348) 的安装包生成及原生音频回归127项通过、4项忽略；其便携版媒体夹具曾在网页body出现前插入节点，已改为等待实际文档就绪，最终Release仍需完整重跑验收。
+
+正式运行 [45205513900](https://github.com/DGHH-Skywalker/CPlayer/actions/runs/45205513900) 的全部 Windows 检查（包括便携版搜索、Native DSP、五Enter、ZIP安装/恢复、底栏、上课闸门）通过。发布前拦截了Windows宿主重编译WASM与固定资源不一致的问题：改为Linux CI规范重建核验、所有平台校验并分发固定资源，保留严格一致性检查；增加3项资源/源码/换行校验测试。最终源码对应的真实B站三模式 [45208070278](https://github.com/DGHH-Skywalker/CPlayer/actions/runs/45208070278) 也全部通过。

@@ -28,8 +28,12 @@ gh workflow run release.yml --ref dev -f tag=v1.3.0
 
 ## 附件与镜像
 
-提供 setup、portable、源码 ZIP、归属许可 ZIP、acceptance-result.json、release-provenance.json 与 SHA256SUMS.txt。原始许可及版权声明见仓库根目录 LICENSE、NOTICE.md 和 vendor/bilikit。
+提供 setup、portable、NoiseLimiter 插件 ZIP、源码 ZIP、归属许可 ZIP、acceptance-result.json、release-provenance.json 与 SHA256SUMS.txt。原始许可及版权声明见仓库根目录 LICENSE、NOTICE.md 和 vendor/bilikit。
 
 大陆镜像采用第三方公开 GitHub 下载代理，链接写入对应发布说明。发布后应从镜像实际下载程序，并与原始 Release 的 SHA-256 核对。运行环境中的连通性不能保证所有大陆网络运营商均可访问，可在说明中提供备用线路。
 
 实体设备、账号与网络限制必须保留在验收结果里；不能为发布而把未执行的检查改为通过。
+
+## 固定 DSP 资源
+
+使用 Rust 1.100.0，Linux / WSL 中先执行 `rustup target add wasm32-unknown-unknown --toolchain 1.100.0`，再用该工具链运行 `pnpm build:dynamics`。提交固定 WASM 与包含源码/产物 SHA-256 的清单。Release prepare 在 Linux 重建并比对；Windows 仅验证源码与资源摘要，不因编译宿主路径差异生成另一份资源。打包仍严格检查资源摘要与标签源码一致，不能为通过发布而移除该校验。

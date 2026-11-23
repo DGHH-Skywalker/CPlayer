@@ -3,5 +3,7 @@
   "version": "1.0.0",
   "entry": "plugin.js",
   "hostApi": 6,
+  "sourceSha256": "830773c0b7f05b3aad42a316575744da499de74d1941559032356f725d335481",
+  "buildPlatform": "linux",
   "wasmSha256": "1c26cef14f401a2e37d0de20d03298b00d5604b6b4dff409219a5a4d19363935"
 }

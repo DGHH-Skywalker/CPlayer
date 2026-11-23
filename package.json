@@ -40,8 +40,8 @@
     "test:all": "pnpm test && pnpm test:native",
     "build:native": "tsx scripts/build-native.ts",
     "start": "electron-vite preview",
-    "dev": "pnpm build:native --dev && tsx scripts/dev.ts",
-    "build": "rimraf dist && pnpm build:dynamics && pnpm build:native && pnpm typecheck && electron-vite build",
+    "dev": "pnpm verify:dynamics && pnpm build:native --dev && tsx scripts/dev.ts",
+    "build": "rimraf dist && pnpm verify:dynamics && pnpm build:native && pnpm typecheck && electron-vite build",
     "postinstall": "node node_modules/electron/install.js && electron-rebuild -f -w better-sqlite3",
     "build:unpack": "pnpm build && electron-builder --dir --config electron-builder.config.ts",
     "build:win": "pnpm build && pnpm pack:noiselimiter && tsx scripts/gen-license.ts && electron-builder --config electron-builder.config.ts --win",
@@ -56,7 +56,8 @@
     "build:dynamics": "node scripts/build-dynamics.mjs",
     "test:dynamics": "cargo test --manifest-path native/noise-dsp/Cargo.toml",
     "pack:noiselimiter": "node scripts/pack-noiselimiter.mjs",
-    "audit:startup": "node scripts/audit-startup.mjs"
+    "audit:startup": "node scripts/audit-startup.mjs",
+    "verify:dynamics": "node scripts/verify-dynamics.mjs"
   },
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.2",

@@ -32,6 +32,12 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: 24.22.1
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.100.0
+          targets: wasm32-unknown-unknown
+      - name: Rebuild fixed DSP on canonical Linux toolchain
+        run: node scripts/build-dynamics.mjs --check
       - name: Verify version tag and release tooling
         id: version
         run: |
@@ -43,7 +49,7 @@ jobs:
           if (!existsSync(`docs/releases/${tag}.md`)) throw new Error('Missing versioned release notes');
           appendFileSync(process.env.GITHUB_OUTPUT, `tag=${tag}\n`);
           JS
-          node --test scripts/prepare-carbonv-release.test.mjs
+          node --test scripts/prepare-carbonv-release.test.mjs scripts/verify-dynamics.test.mjs
 
   windows:
     needs: prepare

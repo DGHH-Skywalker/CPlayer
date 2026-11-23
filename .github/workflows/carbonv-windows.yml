@@ -56,8 +56,8 @@ jobs:
         run: node scripts/verify-bilikit.mjs
       - name: Test portable dynamics core
         run: pnpm test:dynamics
-      - name: Build shared native and browser dynamics resource
-        run: pnpm build:dynamics
+      - name: Verify fixed browser dynamics and matching source
+        run: pnpm verify:dynamics
       - name: Check types
         run: pnpm typecheck
       - name: Lint

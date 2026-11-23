@@ -35,7 +35,9 @@
 使用 Node 24.22.1、pnpm 12.15.0 及原生模块所需 Rust 工具链，依赖使用锁文件安装。
 
 ```bash
+rustup toolchain install 1.100.0
 pnpm install --frozen-lockfile
+pnpm verify:dynamics
 pnpm typecheck
 pnpm lint
 pnpm test
@@ -51,3 +53,5 @@ pnpm build:win --x64 --publish never
 [插件中心与 SDK](docs/plugins/center.md) · [NoiseLimiter](docs/noiselimiter.md) · [v1.4.0](docs/releases/v1.4.0.md)
 
 [渐进启动与按需加载](docs/startup-loading.md)：先准备播放与歌词，优先分发历史歌曲恢复，设置和非核心弹窗按点击加载。
+
+DSP 浏览器资源固定分发，应用构建仅校验；修改 DSP 时在 Linux / WSL 安装 `wasm32-unknown-unknown` 后运行 `pnpm build:dynamics`，提交 WASM 和清单。正式 Release 会在 Linux CI 重建核对。
