@@ -3,21 +3,31 @@ import { app, BrowserWindow } from "electron";
 import { electronApp, optimizer } from "@electron-toolkit/utils";
 import {
   createMainWindow,
-  restoreLyricWindows,
+  createDesktopLyricWindow,
+  createDynamicIslandWindow,
+  createTaskbarLyricWindow,
   getMainWindow,
   focusMainWindow,
   getDesktopLyricWindow,
   getDynamicIslandWindow,
   getTaskbarLyricWindow,
 } from "@main/window";
-import { isMac } from "@main/utils/config";
+import { store } from "@main/store";
+import { isMac, isWin } from "@main/utils/config";
 import { registerIpcHandlers } from "@main/ipc";
 import { init as initMedia } from "@main/services/media";
-import { init as initLastfm } from "@main/services/lastfm";
+import { runStartupTasks } from "./startupTasks";
+import { init as initLastfm, loadSession as loadLastfmSession } from "@main/services/lastfm";
 import { initGlobalHotkey } from "@main/services/globalHotkey";
 import { initDatabase } from "@main/database";
-import { init as initSongCache } from "@main/services/songCache";
-import { init as initDownload } from "@main/services/downloadManager";
+import {
+  init as initSongCache,
+  cleanupStartupFiles as cleanupSongCache,
+} from "@main/services/songCache";
+import {
+  init as initDownload,
+  cleanupStartupFiles as cleanupDownloads,
+} from "@main/services/downloadManager";
 import { pluginRegistry } from "@main/plugins/registry";
 import { init as initPlaybackBridge } from "@main/plugins/playbackBridge";
 import {
@@ -110,6 +120,7 @@ export const initApp = (): void => {
   registerCacheScheme();
   // 其他初始化
   app.whenReady().then(() => {
+    const coreStartedAt = performance.now();
     electronApp.setAppUserModelId("app.carbonv.player");
     // 注册 cache:// 协议处理
     handleCacheProtocol();
@@ -122,11 +133,19 @@ export const initApp = (): void => {
     registerIpcHandlers(() => {
       if (startupComplete) return;
       startupComplete = true;
-      setImmediate(() => {
-        if (isAppQuitting()) return;
-        void startServer();
-        void startMcpServer();
-      });
+      void runStartupTasks(
+        [
+          { name: "全局快捷键", run: initGlobalHotkey },
+          { name: "Last.fm 凭证", run: loadLastfmSession },
+          { name: "外部 API", run: startServer },
+          { name: "MCP", run: startMcpServer },
+          { name: "歌曲缓存维护", run: cleanupSongCache },
+          { name: "下载临时文件维护", run: cleanupDownloads },
+        ],
+        isAppQuitting,
+        (name, error) => coreLog.warn(`后台启动任务失败：${name}`, error),
+        (name, durationMs) => coreLog.info("后台启动阶段", { name, durationMs }),
+      );
     });
     // 初始化数据库
     initDatabase();
@@ -136,6 +155,33 @@ export const initApp = (): void => {
     // 播放配置同步前准备系统媒体控件，对外服务等待启动层退出。
     mainWindow.once("show", () => {
       initMedia();
+      // 歌词外窗只在主窗口可见后恢复，每项之间让出事件循环
+      void runStartupTasks(
+        [
+          {
+            name: "桌面歌词",
+            run: () => {
+              if (store.get("windowStates.desktopLyric.visible")) createDesktopLyricWindow();
+            },
+          },
+          {
+            name: "灵动岛歌词",
+            run: () => {
+              if (store.get("windowStates.dynamicIsland.visible")) createDynamicIslandWindow();
+            },
+          },
+          {
+            name: "任务栏歌词",
+            run: () => {
+              if (isWin && store.get("windowStates.taskbarLyric.visible"))
+                createTaskbarLyricWindow();
+            },
+          },
+        ],
+        isAppQuitting,
+        (name, error) => coreLog.warn(`歌词启动任务失败：${name}`, error),
+        (name, durationMs) => coreLog.info("歌词启动阶段", { name, durationMs }),
+      );
     });
     // 注册 orpheus 协议并处理冷启动唤起
     initOrpheusRegistration();
@@ -143,20 +189,14 @@ export const initApp = (): void => {
     if (coldOrpheusUrl) captureOrpheusUrl(coldOrpheusUrl);
     const coldAudioFiles = extractAudioFiles(process.argv);
     if (coldAudioFiles.length > 0) captureAudioFiles(coldAudioFiles);
-    // 启动歌曲缓存
-    void initSongCache();
-    // 启动下载服务
-    void initDownload();
-    // 初始化 Last.fm 集成
-    void initLastfm();
+    // 仅接线与修正旧任务状态，目录扫描和凭证解密等待首屏退出
+    initSongCache();
+    initDownload();
+    initLastfm();
     // 初始化插件系统
     pluginRegistry.init();
     // 初始化播放事件桥
     initPlaybackBridge();
-    // 恢复歌词相关窗口
-    restoreLyricWindows();
-    // 注册全局快捷键
-    initGlobalHotkey();
     // 周期记录各进程内存
     setTimeout(logProcessMemory, MEMORY_LOG_FIRST_DELAY_MS);
     setInterval(logProcessMemory, MEMORY_LOG_INTERVAL_MS);
@@ -169,7 +209,9 @@ export const initApp = (): void => {
       }
       if (BrowserWindow.getAllWindows().length === 0) createMainWindow();
     });
-    coreLog.info("应用初始化完成");
+    coreLog.info("核心服务初始化完成", {
+      durationMs: Math.round(performance.now() - coreStartedAt),
+    });
   });
   initAppLifecycle();
 };

@@ -67,7 +67,7 @@ where
                 let mut gain = from;
                 for output in data {
                     gain += step;
-                    *output = T::from_sample(source.next().unwrap_or(0.0) * gain);
+                    *output = T::from_sample(source.next_output(gain));
                 }
                 current_gain = Some(target);
             },

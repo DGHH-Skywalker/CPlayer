@@ -19,7 +19,12 @@ const valueOf = (item: PluginSettingItem): unknown => props.values[item.key] ?? 
 <template>
   <div class="flex flex-col gap-2">
     <div
-      v-for="item in schema"
+      v-for="item in schema.filter(
+        (item) =>
+          !item.when ||
+          (values[item.when.key] ??
+            schema.find((value) => value.key === item.when?.key)?.default) === item.when.value,
+      )"
       :key="item.key"
       class="flex items-center justify-between gap-4 rounded-lg bg-on-surface/4 px-4 py-3"
     >
@@ -35,6 +40,17 @@ const valueOf = (item: PluginSettingItem): unknown => props.values[item.key] ?? 
           :model-value="Boolean(valueOf(item))"
           @update:model-value="(val) => emit('change', item.key, val)"
         />
+        <SSlider
+          v-else-if="item.type === 'slider'"
+          :model-value="Number(valueOf(item))"
+          :min="item.min ?? 0"
+          :max="item.max ?? 100"
+          :step="1"
+          class="w-full"
+          @drag-end="(val) => emit('change', item.key, val)"
+        >
+          <template #popover="{ value }">{{ value }}</template>
+        </SSlider>
         <SNumberInput
           v-else-if="item.type === 'number'"
           :model-value="valueOf(item) != null ? Number(valueOf(item)) : null"

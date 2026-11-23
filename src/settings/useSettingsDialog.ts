@@ -1,3 +1,4 @@
+import { pluginCenterUnlocked } from "./pluginCenter";
 import { useStatusStore } from "@/stores/status";
 
 const open = ref(false);
@@ -23,6 +24,8 @@ export const useSettingsDialog = () => ({
    */
   show: (category?: string, highlight?: string, parentKeys: string[] = []) => {
     initialCategory.value = category ?? (useStatusStore().settingsCategory || "general");
+    if (initialCategory.value === "plugins" && !pluginCenterUnlocked.value)
+      initialCategory.value = "general";
     initialHighlight.value = highlight;
     initialParentKeys.value = parentKeys;
     open.value = true;

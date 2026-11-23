@@ -18,6 +18,7 @@ vi.mock("@main/utils/nativeLoader", () => ({
       }
     },
     initLogger: vi.fn(),
+    configureDynamics: vi.fn(),
     setHttpProxy: vi.fn(),
   }),
 }));

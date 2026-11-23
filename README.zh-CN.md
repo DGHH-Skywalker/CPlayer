@@ -10,6 +10,9 @@
 
 ## 主要功能
 
+- **插件中心 / NoiseLimiter**：设置空白处 3 秒内按 5 次 Enter；默认动态限制，覆盖音乐和 B 站音频，支持 JS/ZIP 插件安装与权限管理
+- **哔哩Song 定位**：拖动预览、松手定位、缓冲显示与暂停状态保留
+
 - 普通音乐模式：本地音乐、流媒体、歌词、歌单与播放队列
 - 校园点歌模式：纯搜索首页、FIFO 队尾点歌、去重、拖拽排序
 - 课间调度：上海时区每周作息、特殊日期与停用日期，到上课时间强制停止并清空当前队列
@@ -44,3 +47,7 @@ pnpm build:win --x64 --publish never
 ## 许可与归属
 
 遵循 [AGPL-3.0](LICENSE)，原作者和贡献者保留各自代码版权，来源见 [NOTICE](NOTICE.md)。Core 保留 [MIT 许可](vendor/bilikit/LICENSE) 及 [品牌资产条款](vendor/bilikit/BRAND-ASSETS.md)。平台商标、音乐与视频内容归相应权利人所有。
+
+[插件中心与 SDK](docs/plugins/center.md) · [NoiseLimiter](docs/noiselimiter.md) · [v1.4.0](docs/releases/v1.4.0.md)
+
+[渐进启动与按需加载](docs/startup-loading.md)：先准备播放与歌词，优先分发历史歌曲恢复，设置和非核心弹窗按点击加载。

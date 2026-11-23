@@ -449,6 +449,8 @@ defineExpose({
   /** 进入批量管理模式 */
   enterBatch: batch.enter,
 });
+/** 需要选择歌单时再解析管理界面 */
+const loadPlaylistPickerDialog = () => import("@/components/modals/PlaylistPickerDialog.vue");
 </script>
 
 <template>
@@ -982,7 +984,12 @@ defineExpose({
       </template>
     </SDialog>
     <!-- 添加到歌单 -->
-    <PlaylistPickerDialog v-model:open="pickerOpen" :mode="pickerMode" :tracks="pickerTracks" />
+    <SAsyncDialog
+      v-model:open="pickerOpen"
+      :loader="loadPlaylistPickerDialog"
+      :mode="pickerMode"
+      :tracks="pickerTracks"
+    />
     <!-- 编辑元数据 -->
     <TagEditorDialog v-model:open="tagEditorOpen" :track="tagEditorTrack" />
   </div>

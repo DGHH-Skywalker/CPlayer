@@ -1,8 +1,15 @@
+import { defineAsyncComponent } from "vue";
 import type { SettingCategory } from "@/types/settings-schema";
 import { useSettingsStore } from "@/stores/settings";
-import FileCacheManager from "@/components/settings/custom/FileCacheManager.vue";
-import DbCacheManager from "@/components/settings/custom/DbCacheManager.vue";
 import IconLucideHardDrive from "~icons/lucide/hard-drive";
+
+/** 自定义设置只在对应区域挂载时解析 */
+const FileCacheManager = defineAsyncComponent(
+  () => import("@/components/settings/custom/FileCacheManager.vue"),
+);
+const DbCacheManager = defineAsyncComponent(
+  () => import("@/components/settings/custom/DbCacheManager.vue"),
+);
 
 const localCacheCategory: SettingCategory = {
   id: "localCache",

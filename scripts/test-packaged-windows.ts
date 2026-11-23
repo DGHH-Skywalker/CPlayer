@@ -1,3 +1,4 @@
+import { CURRENT_AGREEMENT_VERSION } from "../shared/constants/agreement";
 import type { SchoolSnapshot } from "../shared/types/school";
 import type { BilibiliState } from "../shared/types/bilibili";
 interface DebugTarget {
@@ -7,6 +8,7 @@ interface DebugTarget {
 }
 interface DebugClient {
   socket: WebSocket;
+  onEvent(method: string, callback: (params: Record<string, unknown>) => void): () => void;
   send(method: string, params?: Record<string, unknown>): Promise<unknown>;
 }
 interface Evaluation {
@@ -14,7 +16,7 @@ interface Evaluation {
   result: { value: unknown };
 }
 import assert from "node:assert/strict";
-import { readdir, stat, open, readFile, writeFile } from "node:fs/promises";
+import { readdir, stat, open, readFile, writeFile, mkdir } from "node:fs/promises";
 import { resolve } from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import { setTimeout as delay } from "node:timers/promises";
@@ -57,14 +59,19 @@ const connect = async (url: string): Promise<DebugClient> => {
     socket.addEventListener("open", () => resolveOpen(), { once: true });
     socket.addEventListener("error", reject, { once: true });
   });
+  const listeners = new Map<string, Set<(params: Record<string, unknown>) => void>>();
   let serial = 0;
   const pending = new Map<number, { resolve(value: unknown): void; reject(error: Error): void }>();
   socket.addEventListener("message", ({ data }) => {
     const message = JSON.parse(String(data)) as {
       id: number;
+      method?: string;
+      params?: Record<string, unknown>;
       error?: { message: string };
       result: unknown;
     };
+    if (message.method)
+      for (const listener of listeners.get(message.method) ?? []) listener(message.params ?? {});
     const receiver = pending.get(message.id);
     if (!receiver) return;
     if (message.error) receiver.reject(new Error(message.error.message));
@@ -72,6 +79,19 @@ const connect = async (url: string): Promise<DebugClient> => {
   });
   return {
     socket,
+    /** 监听调试器实际解析事件，避免 file 协议 Performance Resource Timing 缺失 */
+    onEvent(method, callback) {
+      let callbacks = listeners.get(method);
+      if (!callbacks) {
+        callbacks = new Set();
+        listeners.set(method, callbacks);
+      }
+      callbacks.add(callback);
+      return () => {
+        callbacks.delete(callback);
+        if (!callbacks.size) listeners.delete(method);
+      };
+    },
     /**
      * 执行页面命令，超时后移除待处理项
      * @param method - CDP 方法
@@ -118,10 +138,21 @@ for (const resource of [
   "bilikit/manifest.json",
   "bilikit/LICENSE",
   "native/audio-engine.node",
+  "noiselimiter/plugin.js",
+  "noiselimiter/dynamics.wasm",
+  "noiselimiter/manifest.json",
 ]) {
   assert.ok((await stat(resolve("dist/win-unpacked/resources", resource))).size > 0);
 }
 
+const configDirectory = resolve("dist/UserData/app-data/config");
+await mkdir(configDirectory, { recursive: true });
+await writeFile(
+  resolve(configDirectory, "settings.json"),
+  JSON.stringify({
+    system: { onboardingCompleted: true, agreedAgreementVersion: CURRENT_AGREEMENT_VERSION },
+  }),
+);
 const logFile = await open("dist/portable-smoke.log", "w");
 const appProcess = spawn(resolve("dist", portable), ["--remote-debugging-port=9333"], {
   stdio: ["ignore", logFile.fd, logFile.fd],
@@ -146,6 +177,187 @@ try {
   }
   assert.ok(snapshot, "预加载校园 API 不可用");
   assert.equal(snapshot.config.enabled, false);
+  for (let i = 0; i < 200; i++) {
+    if (
+      await evaluate(
+        client,
+        "!document.getElementById('app-loading') && !!document.querySelector('.player-shell')",
+      )
+    )
+      break;
+    await delay(100);
+  }
+  assert.equal(
+    await evaluate(
+      client,
+      "!document.getElementById('app-loading') && !!document.querySelector('.player-shell')",
+    ),
+    true,
+    "核心播放器与首页未就绪",
+  );
+  const startup = await evaluate<{
+    marks: Array<{ name: string; startTime: number }>;
+    scripts: string[];
+  }>(
+    client,
+    `({marks:performance.getEntriesByType('mark').filter(e=>e.name.startsWith('carbonv:')).map(e=>({name:e.name,startTime:e.startTime})),scripts:performance.getEntriesByType('resource').map(e=>e.name).filter(n=>n.endsWith('.js'))})`,
+  );
+  const parsedScripts: string[] = [];
+  const offParsed = client.onEvent("Debugger.scriptParsed", (params) => {
+    if (typeof params.url === "string" && /\/out\/renderer\/assets\/[^/]+\.js$/.test(params.url))
+      parsedScripts.push(params.url);
+  });
+  await client.send("Debugger.enable");
+  startup.scripts = [...new Set(parsedScripts)];
+  await client.send("Debugger.disable");
+  offParsed();
+  assert.ok(startup.scripts.length > 0, "未捕获实际首屏JS模块，不能判定懒加载");
+  assert.ok(startup.marks.some((m) => m.name === "carbonv:player-ready"));
+  assert.ok(startup.marks.some((m) => m.name === "carbonv:startup-complete"));
+  assert.ok(
+    !startup.scripts.some((n) =>
+      /\/(SettingsContent|SchoolControlCenter|PluginCenter|FullPlayer|Bilibili-|Stats-|Library-)/.test(
+        n,
+      ),
+    ),
+    "未打开页面进入启动加载集合",
+  );
+  await writeFile("dist/startup-acceptance.json", JSON.stringify(startup, null, 2));
+
+  assert.equal(await evaluate(client, "window.api.plugins.centerState()"), false);
+  const probePath = resolve("dist/plugin-probe.js");
+  await writeFile(
+    probePath,
+    `/**
+ * @id carbonv.acceptance
+ * @name Acceptance
+ * @version 1.0.0
+ * @apiLevel 6
+ * @grant ui,settings
+ */
+cplayer.register({});
+cplayer.settings.get('player.autoPlay').then(v=>cplayer.settings.set('player.autoPlay',v)).then(()=>cplayer.ui.openSettings('general'));`,
+  );
+  const probe = await evaluate<{ ok: boolean }>(
+    client,
+    `window.api.plugins.install(${JSON.stringify(probePath)})`,
+  );
+  assert.equal(probe.ok, true);
+  for (let i = 0; i < 100; i++) {
+    if (await evaluate(client, "!!document.querySelector('[data-settings-content]')")) break;
+    await delay(100);
+  }
+  assert.equal(
+    await evaluate(client, "!!document.querySelector('[data-settings-content]')"),
+    true,
+    "API6 设置导航失败",
+  );
+  await evaluate(client, "document.querySelector('[data-settings-content]').focus()");
+  for (let i = 0; i < 5; i++) {
+    await client.send("Input.dispatchKeyEvent", {
+      type: "keyDown",
+      key: "Enter",
+      code: "Enter",
+      windowsVirtualKeyCode: 13,
+    });
+    await client.send("Input.dispatchKeyEvent", {
+      type: "keyUp",
+      key: "Enter",
+      code: "Enter",
+      windowsVirtualKeyCode: 13,
+    });
+    await delay(70);
+  }
+  assert.equal(await evaluate(client, "window.api.plugins.centerState()"), true);
+  for (let i = 0; i < 100; i++) {
+    if (
+      await evaluate(
+        client,
+        "document.querySelector('[data-settings-content]')?.textContent.includes('NoiseLimiter')",
+      )
+    )
+      break;
+    await delay(100);
+  }
+  assert.equal(
+    await evaluate(
+      client,
+      "document.querySelector('[data-settings-content]').textContent.includes('NoiseLimiter')",
+    ),
+    true,
+  );
+  await client.send("Input.dispatchKeyEvent", {
+    type: "keyDown",
+    key: "Escape",
+    code: "Escape",
+    windowsVirtualKeyCode: 27,
+  });
+  await client.send("Input.dispatchKeyEvent", {
+    type: "keyUp",
+    key: "Escape",
+    code: "Escape",
+    windowsVirtualKeyCode: 27,
+  });
+  await delay(300);
+  await evaluate(client, "window.api.plugins.uninstall('carbonv.acceptance')");
+  const noiseId = "carbonv.noise-limiter";
+  const initialNoise = await evaluate<{
+    native: string;
+    enabled: boolean;
+    config: { mode: string; strength: number; ceilingDb: number };
+  }>(client, "window.api.plugins.effectsState()");
+  assert.equal(initialNoise.enabled, true);
+  assert.equal(initialNoise.native, "active", "打包原生DSP未正确配置");
+  assert.equal(initialNoise.config.mode, "dynamic");
+  assert.equal(initialNoise.config.strength, 50);
+  assert.equal(initialNoise.config.ceilingDb, -12);
+  await evaluate(client, `window.api.plugins.list('${noiseId}')`);
+  await evaluate(client, `window.api.plugins.setSetting('${noiseId}','mode','basic')`);
+  await evaluate(client, `window.api.plugins.setSetting('${noiseId}','basicStrength',75)`);
+  await delay(150);
+  const basic = await evaluate<{ config: { mode: string; strength: number } }>(
+    client,
+    "window.api.plugins.effectsState()",
+  );
+  assert.equal(basic.config.mode, "basic");
+  assert.equal(basic.config.strength, 75);
+  await evaluate(client, `window.api.plugins.uninstall('${noiseId}')`);
+  assert.equal(
+    await evaluate(client, "window.api.plugins.effectsState().then(s=>s.enabled)"),
+    false,
+  );
+  const zipPath = resolve("dist/NoiseLimiter-1.0.0.cplayer.zip");
+  const installedNoise = await evaluate<{ ok: boolean; error?: string }>(
+    client,
+    `window.api.plugins.install(${JSON.stringify(zipPath)})`,
+  );
+  assert.equal(installedNoise.ok, true, installedNoise.error);
+  await evaluate(client, `window.api.plugins.list('${noiseId}')`);
+  await evaluate(client, `window.api.plugins.setSetting('${noiseId}','mode','dynamic')`);
+  await evaluate(client, `window.api.plugins.setEnabled('${noiseId}',false)`);
+  assert.equal(
+    await evaluate(client, "window.api.plugins.effectsState().then(s=>s.enabled)"),
+    false,
+  );
+  await evaluate(client, "window.api.plugins.restoreBuiltin()");
+  await evaluate(client, `window.api.plugins.list('${noiseId}')`);
+  await delay(100);
+  assert.equal(
+    await evaluate(client, "window.api.plugins.effectsState().then(s=>s.enabled)"),
+    true,
+  );
+  await writeFile(
+    "dist/plugin-acceptance.json",
+    JSON.stringify({
+      apiLevel: 6,
+      fiveEnterUnlock: true,
+      defaultNoise: initialNoise,
+      basic,
+      zipInstall: true,
+      uninstall: true,
+      restore: true,
+    }),
+  );
   const devices = await evaluate<{ success: boolean; data?: unknown[] }>(
     client,
     "window.api.player.getOutputDevices()",
@@ -361,10 +573,15 @@ try {
     success: true,
     portable,
     renderer: page.url,
+    startupLazyLoading: true,
+    pluginCenter: true,
+    noiseLimiter: true,
     packagedPreload: true,
     classGate: true,
     packagedCore: browser.coreVersion,
     nativeAudio,
+    startup,
+    noiseLimiterState: initialNoise,
     bilibiliLayout: true,
     floatingSongButton: true,
     searchFocusPlayback: true,

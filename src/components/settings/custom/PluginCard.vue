@@ -69,7 +69,6 @@ const onMenuSelect = (key: string): void => {
 <template>
   <PluginCardBase
     :name="info.manifest.name"
-    :description="info.manifest.description"
     :author="info.manifest.author"
     clickable
     @click="emit('detail', info.manifest.id)"

@@ -46,6 +46,7 @@ watch(
     if (value) session.reset();
     else session.stop(false);
   },
+  { immediate: true },
 );
 
 const bars = computed(() => {

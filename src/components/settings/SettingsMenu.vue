@@ -14,11 +14,13 @@ const emit = defineEmits<{
 const { t } = useI18n();
 
 const menuItems = computed<SMenuItem[]>(() =>
-  props.categories.map((cat) => ({
-    key: cat.id,
-    label: t(`settings.group.${cat.id}`),
-    icon: cat.icon,
-  })),
+  props.categories
+    .filter((cat) => !cat.visible || cat.visible())
+    .map((cat) => ({
+      key: cat.id,
+      label: t(`settings.group.${cat.id}`),
+      icon: cat.icon,
+    })),
 );
 </script>
 

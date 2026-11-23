@@ -342,6 +342,9 @@ onMounted(() => {
   if (!playlistStore.initialized) playlistStore.load();
   void downloadStore.init();
 });
+
+/** 首次打开才解析PlaylistCreateDialog，加载时保留操作反馈 */
+const loadPlaylistCreateDialog = () => import("@/components/modals/PlaylistCreateDialog.vue");
 </script>
 
 <template>
@@ -364,8 +367,9 @@ onMounted(() => {
       </div>
     </SContextMenu>
     <!-- 新建歌单 -->
-    <PlaylistCreateDialog
+    <SAsyncDialog
       v-model:open="createDialogOpen"
+      :loader="loadPlaylistCreateDialog"
       :mode="createMode"
       @created="handleCreated"
     />

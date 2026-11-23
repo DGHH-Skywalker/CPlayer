@@ -42,7 +42,7 @@ pub(super) fn fill_buffer(
             0
         } else {
             current += step;
-            convert_sample(source.next().unwrap_or(0.0), current, format.valid_bits)
+            convert_sample(source.next_output(current), 1.0, format.valid_bits)
         };
         raw[..bytes_per_sample].copy_from_slice(&value.to_le_bytes()[..bytes_per_sample]);
         chunk.copy_from_slice(&raw[..bytes_per_sample]);

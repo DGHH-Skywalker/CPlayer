@@ -1,4 +1,5 @@
 [workspace]
+exclude = ["native/noise-dsp"]
 members = [
   "./native/automix-worker",
   "./native/audio-engine",

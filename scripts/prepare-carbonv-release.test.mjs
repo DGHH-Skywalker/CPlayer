@@ -13,7 +13,7 @@ const fixture = () => {
   const input = join(root, "artifacts");
   mkdirSync(input);
   mkdirSync(join(root, "vendor/bilikit"), { recursive: true });
-  writeFileSync(join(root, "package.json"), JSON.stringify({ version: "1.3.0" }));
+  writeFileSync(join(root, "package.json"), JSON.stringify({ version: "1.4.0" }));
   for (const name of [
     "LICENSE",
     "NOTICE.md",
@@ -29,6 +29,22 @@ const fixture = () => {
       sha256: createHash("sha256").update("fixture").digest("hex"),
     }),
   );
+  mkdirSync(join(root, "vendor/noiselimiter/camilladsp"), { recursive: true });
+  for (const name of [
+    "UPSTREAM.json",
+    "camilladsp/LICENSE_MPL2.0.txt",
+    "camilladsp/LICENSE_GLPv3.txt",
+  ])
+    writeFileSync(join(root, "vendor/noiselimiter", name), "fixture license");
+  writeFileSync(join(root, "vendor/noiselimiter/dynamics.wasm"), "fixture wasm");
+  writeFileSync(
+    join(root, "vendor/noiselimiter/manifest.json"),
+    JSON.stringify({
+      version: "1.0.0",
+      wasmSha256: createHash("sha256").update("fixture wasm").digest("hex"),
+    }),
+  );
+  writeFileSync(join(input, "NoiseLimiter-1.0.0.cplayer.zip"), "PKfixture");
   execFileSync("git", ["init", "-q"], { cwd: root });
   execFileSync("git", ["add", "."], { cwd: root });
   execFileSync(
@@ -46,11 +62,14 @@ const fixture = () => {
   );
   const commit = execFileSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" }).trim();
   for (const kind of ["setup", "portable"])
-    writeFileSync(join(input, `Cplayer-1.3.0-x64-${kind}.exe`), "MZfixture");
-  writeFileSync(join(input, "build-provenance.json"), JSON.stringify({ version: "1.3.0", commit }));
+    writeFileSync(join(input, `Cplayer-1.4.0-x64-${kind}.exe`), "MZfixture");
+  writeFileSync(join(input, "build-provenance.json"), JSON.stringify({ version: "1.4.0", commit }));
   writeFileSync(
     join(input, "acceptance-result.json"),
     JSON.stringify({
+      startupLazyLoading: true,
+      pluginCenter: true,
+      noiseLimiter: true,
       success: true,
       packagedPreload: true,
       classGate: true,
@@ -65,8 +84,8 @@ test("发布附件包含对应源码、许可与准确校验值", () => {
   const f = fixture();
   try {
     const result = assembleRelease(f.input, f.output, f.root);
-    assert.equal(result.version, "1.3.0");
-    assert.ok(result.files.includes("CarbonVPlayer-1.3.0-source.zip"));
+    assert.equal(result.version, "1.4.0");
+    assert.ok(result.files.includes("CarbonVPlayer-1.4.0-source.zip"));
     const sums = readFileSync(join(f.output, "SHA256SUMS.txt"), "utf8").trim().split("\n");
     for (const line of sums) {
       const [digest, name] = line.split("  ");
@@ -87,7 +106,7 @@ test("拒绝错用其他提交的二进制文件", () => {
   try {
     writeFileSync(
       join(f.input, "build-provenance.json"),
-      JSON.stringify({ version: "1.3.0", commit: "old" }),
+      JSON.stringify({ version: "1.4.0", commit: "old" }),
     );
     assert.throws(() => assembleRelease(f.input, f.output, f.root), /Build commit differs/);
   } finally {
@@ -111,7 +130,7 @@ test("便携版上课闸门验收失败时拒绝发布", () => {
 test("缺少安装包时拒绝发布", () => {
   const f = fixture();
   try {
-    rmSync(join(f.input, "Cplayer-1.3.0-x64-setup.exe"));
+    rmSync(join(f.input, "Cplayer-1.4.0-x64-setup.exe"));
     assert.throws(() => assembleRelease(f.input, f.output, f.root), /Missing or duplicate asset/);
   } finally {
     rmSync(f.root, { recursive: true, force: true });

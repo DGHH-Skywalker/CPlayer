@@ -1,4 +1,5 @@
-import SchoolControlCenter from "@/components/settings/custom/SchoolControlCenter.vue";
+import { defineAsyncComponent } from "vue";
+import { pluginCenterUnlocked } from "./pluginCenter";
 import IconLucideSchool from "~icons/lucide/school";
 import type { SettingCategory } from "@/types/settings-schema";
 import generalCategory from "./categories/general";
@@ -14,8 +15,18 @@ import downloadCategory from "./categories/download";
 import localCacheCategory from "./categories/localCache";
 import pluginsCategory from "./categories/plugins";
 import otherCategory from "./categories/other";
-import AboutSettings from "@/components/settings/custom/AboutSettings.vue";
 import IconLucideInfo from "~icons/lucide/info";
+
+/** 自定义设置只在对应区域挂载时解析 */
+const PluginCenter = defineAsyncComponent(
+  () => import("@/components/settings/custom/PluginCenter.vue"),
+);
+const SchoolControlCenter = defineAsyncComponent(
+  () => import("@/components/settings/custom/SchoolControlCenter.vue"),
+);
+const AboutSettings = defineAsyncComponent(
+  () => import("@/components/settings/custom/AboutSettings.vue"),
+);
 
 export const settingsSchema: SettingCategory[] = [
   { id: "school", icon: IconLucideSchool, component: SchoolControlCenter, sections: [] },
@@ -30,7 +41,12 @@ export const settingsSchema: SettingCategory[] = [
   mediaSourceCategory,
   downloadCategory,
   localCacheCategory,
-  pluginsCategory,
+  {
+    ...pluginsCategory,
+    component: PluginCenter,
+    visible: () => pluginCenterUnlocked.value,
+    sections: [],
+  },
   otherCategory,
   { id: "about", icon: IconLucideInfo, component: AboutSettings, sections: [] },
 ];

@@ -4,23 +4,21 @@
 
 import type { Server } from "node:http";
 import os from "node:os";
-import { Hono } from "hono";
-import { serve, upgradeWebSocket } from "@hono/node-server";
-import { WebSocketServer } from "ws";
+import type { WebSocketServer as WebSocketServerType } from "ws";
 import { store } from "@main/store";
 import { serverLog } from "@main/utils/logger";
 import { broadcast } from "@main/utils/broadcast";
 import type { ExternalApiStatus } from "@shared/types/settings";
 import { externalControlGate, wsGate } from "./gate";
-import { buildRoutes } from "./routes";
-import { wsHandlers } from "./ws";
 
 let runningServer: Server | null = null;
-let runningWss: WebSocketServer | null = null;
+let runningWss: WebSocketServerType | null = null;
 let runningPort: number | null = null;
 let runningHost: string | null = null;
 let runningAllowLan = false;
 let lastError: { code: string; message: string } | null = null;
+let starting: Promise<ExternalApiStatus> | null = null;
+let startRequested = false;
 
 /**
  * 取局域网展示地址，绑定 0.0.0.0 时作为展示给用户的局域网入口
@@ -41,6 +39,7 @@ const getLanAddress = (): string | null => {
   );
 };
 
+/** 查询运行状态，不加载 HTTP 或路由依赖 */
 export const getServerStatus = (): ExternalApiStatus => ({
   listening: runningServer !== null,
   allowLan: runningAllowLan,
@@ -54,83 +53,107 @@ const publishStatus = (): void => broadcast("externalApi:status", getServerStatu
 
 /** 启动外部 API 服务 */
 export const startServer = (): Promise<ExternalApiStatus> => {
-  return new Promise((resolve) => {
-    if (runningServer) {
-      resolve(getServerStatus());
-      return;
-    }
-    // 功能关闭时不监听端口
-    if (!store.get("externalApi.enabled")) {
-      resolve(getServerStatus());
-      return;
-    }
+  startRequested = store.get("externalApi.enabled");
+  if (!startRequested) return Promise.resolve(getServerStatus());
+  if (starting) return starting;
+  if (runningServer) return Promise.resolve(getServerStatus());
+  starting = Promise.all([
+    import("hono"),
+    import("@hono/node-server"),
+    import("ws"),
+    import("./routes"),
+    import("./ws"),
+  ])
+    .then(
+      ([
+        { Hono },
+        { serve, upgradeWebSocket },
+        { WebSocketServer },
+        { buildRoutes },
+        { wsHandlers },
+      ]) => {
+        if (!startRequested || !store.get("externalApi.enabled")) return getServerStatus();
+        return new Promise<ExternalApiStatus>((resolve) => {
+          const port = store.get("externalApi.port");
+          // 默认仅本机可访问；服务自身无鉴权，开放局域网需用户显式开启
+          const hostname = store.get("externalApi.allowLan") ? "0.0.0.0" : "127.0.0.1";
 
-    const port = store.get("externalApi.port");
-    // 默认仅本机可访问；服务自身无鉴权，开放局域网需用户显式开启
-    const hostname = store.get("externalApi.allowLan") ? "0.0.0.0" : "127.0.0.1";
+          const app = new Hono();
+          app.use("/api/*", externalControlGate);
+          app.route("/api", buildRoutes());
+          app.get(
+            "/ws",
+            externalControlGate,
+            wsGate,
+            upgradeWebSocket(() => wsHandlers),
+          );
+          app.get("/", (c) => c.text("Cplayer external API"));
 
-    const app = new Hono();
-    app.use("/api/*", externalControlGate);
-    app.route("/api", buildRoutes());
-    app.get(
-      "/ws",
-      externalControlGate,
-      wsGate,
-      upgradeWebSocket(() => wsHandlers),
-    );
-    app.get("/", (c) => c.text("Cplayer external API"));
+          const wss = new WebSocketServer({ noServer: true });
+          let settled = false;
 
-    const wss = new WebSocketServer({ noServer: true });
-    let settled = false;
+          const server = serve({
+            fetch: app.fetch,
+            port,
+            hostname,
+            websocket: { server: wss },
+          }) as Server;
 
-    const server = serve({
-      fetch: app.fetch,
-      port,
-      hostname,
-      websocket: { server: wss },
-    }) as Server;
+          // error / listening 互斥：先到先 settle
+          server.once("error", (err: NodeJS.ErrnoException) => {
+            if (settled) return;
+            settled = true;
+            const error = { code: err.code ?? "UNKNOWN", message: err.message };
+            serverLog.error(`外部 API 监听 ${port} 失败 (${error.code}): ${error.message}`);
+            wss.close();
+            try {
+              server.close();
+            } catch {
+              // server.close 在 listen 失败的情况下可能抛 ERR_SERVER_NOT_RUNNING，忽略
+            }
+            runningServer = null;
+            runningWss = null;
+            runningPort = null;
+            runningHost = null;
+            runningAllowLan = false;
+            lastError = error;
+            publishStatus();
+            resolve(getServerStatus());
+          });
 
-    // error / listening 互斥：先到先 settle
-    server.once("error", (err: NodeJS.ErrnoException) => {
-      if (settled) return;
-      settled = true;
-      const error = { code: err.code ?? "UNKNOWN", message: err.message };
-      serverLog.error(`外部 API 监听 ${port} 失败 (${error.code}): ${error.message}`);
-      wss.close();
-      try {
-        server.close();
-      } catch {
-        // server.close 在 listen 失败的情况下可能抛 ERR_SERVER_NOT_RUNNING，忽略
-      }
-      runningServer = null;
-      runningWss = null;
-      runningPort = null;
-      runningHost = null;
-      runningAllowLan = false;
-      lastError = error;
+          server.once("listening", () => {
+            if (settled) return;
+            settled = true;
+            runningServer = server;
+            runningWss = wss;
+            runningPort = port;
+            runningAllowLan = hostname === "0.0.0.0";
+            runningHost = runningAllowLan ? (getLanAddress() ?? "0.0.0.0") : hostname;
+            lastError = null;
+            publishStatus();
+            serverLog.info(`外部 API 已启动: http://${hostname}:${port}`);
+            resolve(getServerStatus());
+          });
+        });
+      },
+    )
+    .catch((error: unknown) => {
+      lastError = { code: "UNKNOWN", message: String(error) };
       publishStatus();
-      resolve(getServerStatus());
+      serverLog.error("外部 API 初始化失败", error);
+      return getServerStatus();
+    })
+    .finally(() => {
+      starting = null;
     });
-
-    server.once("listening", () => {
-      if (settled) return;
-      settled = true;
-      runningServer = server;
-      runningWss = wss;
-      runningPort = port;
-      runningAllowLan = hostname === "0.0.0.0";
-      runningHost = runningAllowLan ? (getLanAddress() ?? "0.0.0.0") : hostname;
-      lastError = null;
-      publishStatus();
-      serverLog.info(`外部 API 已启动: http://${hostname}:${port}`);
-      resolve(getServerStatus());
-    });
-  });
+  return starting;
 };
 
 /** 停止外部 API 服务 */
-export const stopServer = (): Promise<void> => {
-  if (!runningServer) return Promise.resolve();
+export const stopServer = async (): Promise<void> => {
+  startRequested = false;
+  await starting;
+  if (startRequested || !runningServer) return;
   const server = runningServer;
   const wss = runningWss;
   runningServer = null;
@@ -148,6 +171,7 @@ export const stopServer = (): Promise<void> => {
       else serverLog.info("外部 API 已关闭");
       resolve();
     });
+    server.closeAllConnections();
   });
   return serverClosed;
 };

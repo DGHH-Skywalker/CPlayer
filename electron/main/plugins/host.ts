@@ -1,3 +1,4 @@
+import { registerDynamics, removeDynamics } from "@main/services/audioEffects";
 /**
  * Host API 主进程侧实现
  *
@@ -64,18 +65,27 @@ export const dispatchHostCall = async (
   try {
     if (!isActive()) return;
     // 权限门控
-    const requiredGrant =
-      method === "request" || method === "music.searchOnline"
-        ? "network"
-        : method === "music.searchLibrary"
-          ? "library"
-          : method === "api.call"
-            ? "api"
-            : method === "notify"
-              ? "ui"
-              : method.startsWith("player.")
-                ? "control"
-                : undefined;
+    const requiredGrant = method.startsWith("ui.")
+      ? "ui"
+      : method.startsWith("audio.")
+        ? "dsp"
+        : method.startsWith("settings.")
+          ? "settings"
+          : method.startsWith("browser.")
+            ? "browser"
+            : method.startsWith("files.")
+              ? "files"
+              : method === "request" || method === "music.searchOnline"
+                ? "network"
+                : method === "music.searchLibrary"
+                  ? "library"
+                  : method === "api.call"
+                    ? "api"
+                    : method === "notify"
+                      ? "ui"
+                      : method.startsWith("player.")
+                        ? "control"
+                        : undefined;
     /**
      * 按用户当前授权校验本次调用
      */
@@ -87,8 +97,90 @@ export const dispatchHostCall = async (
       }
     };
     checkPermission();
+    /** 动态模块加载结束后再次校验会话和实时授权 */
+    const checkedImport = async <T>(module: Promise<T>): Promise<T> => {
+      const loaded = await module;
+      if (!isActive()) throw new Error("插件会话已失效");
+      checkPermission();
+      return loaded;
+    };
     let data: unknown;
     switch (method) {
+      case "ui.openSettings":
+        (await checkedImport(import("@main/utils/broadcast"))).sendToMain("system:openSettings", {
+          category: args[0] === undefined ? undefined : z.string().max(64).parse(args[0]),
+        });
+        break;
+      case "ui.navigate":
+        (await checkedImport(import("@main/utils/broadcast"))).sendToMain(
+          "plugin:navigate",
+          z
+            .string()
+            .regex(/^\/(?!\/)[a-zA-Z0-9_/?=&%.-]*$/)
+            .max(512)
+            .parse(args[0]),
+        );
+        break;
+      case "audio.registerEffect":
+        registerDynamics(pluginId, args[0]);
+        break;
+      case "audio.removeEffect":
+        removeDynamics(pluginId);
+        break;
+      case "assets.read":
+        data = await (
+          await checkedImport(import("./bundle"))
+        ).readPluginAsset(pluginId, z.string().parse(args[0]));
+        break;
+      case "files.pick":
+        data = await (
+          await checkedImport(import("./fileAccess"))
+        ).pickPluginFile(
+          pluginId,
+          z.enum(["read", "write"]).parse(args[0]),
+          () => isActive() && getGrants().includes("files"),
+        );
+        break;
+      case "files.read":
+        data = await (
+          await checkedImport(import("./fileAccess"))
+        ).readGrantedFile(pluginId, z.string().parse(args[0]));
+        break;
+      case "files.write":
+        await (
+          await checkedImport(import("./fileAccess"))
+        ).writeGrantedFile(pluginId, z.string().parse(args[0]), args[1] as Uint8Array);
+        break;
+      case "settings.get":
+      case "settings.set": {
+        const { store } = await checkedImport(import("@main/store"));
+        if (!isActive()) return;
+        checkPermission();
+        const key = z
+          .string()
+          .regex(
+            /^player\.(autoPlay|rememberLastTrack|fadeEnabled|fadeDuration|loudnessNormalization)$/,
+          )
+          .parse(args[0]);
+        if (method === "settings.get") data = store.get(key as never);
+        else {
+          const value = key.endsWith("fadeDuration")
+            ? z.number().int().min(0).max(10000).parse(args[1])
+            : z.boolean().parse(args[1]);
+          store.set(key as never, value as never);
+          (await checkedImport(import("@main/ipc/config"))).applyConfigChange(key, value);
+        }
+        break;
+      }
+      case "browser.command": {
+        const command = z
+          .enum(["status", "navigate", "back", "forward", "reload", "theater", "fullscreen"])
+          .parse(args[0]);
+        data = await (
+          await checkedImport(import("@main/services/bilibiliBrowser"))
+        ).bilibiliCommand(command, args[1]);
+        break;
+      }
       case "request":
         data = await hostRequest(args[0] as string, (args[1] ?? {}) as HostRequestOptions);
         break;

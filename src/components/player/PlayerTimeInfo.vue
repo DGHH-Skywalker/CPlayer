@@ -24,6 +24,10 @@ const { timeDisplay, toggleTimeFormat } = useTimeFormat();
 const speedOpen = ref(false);
 /** AB 循环面板 */
 const abLoopOpen = ref(false);
+/** 点击变速入口后再读取配置界面 */
+const loadSpeedDialog = () => import("@/components/modals/SpeedDialog.vue");
+/** 点击片段循环入口后再读取配置界面 */
+const loadAbLoopDialog = () => import("@/components/modals/AbLoopDialog.vue");
 </script>
 
 <template>
@@ -84,8 +88,8 @@ const abLoopOpen = ref(false);
       </STag>
     </div>
   </div>
-  <SpeedDialog v-model:open="speedOpen" />
-  <AbLoopDialog v-model:open="abLoopOpen" />
+  <SAsyncDialog v-model:open="speedOpen" :loader="loadSpeedDialog" />
+  <SAsyncDialog v-model:open="abLoopOpen" :loader="loadAbLoopDialog" />
 </template>
 
 <style scoped>

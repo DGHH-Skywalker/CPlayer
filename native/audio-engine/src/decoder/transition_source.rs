@@ -170,6 +170,9 @@ impl TransitionControl {
 
 /// 一条设备输出流中的双槽位混音源
 pub struct TransitionSource {
+    output_effect: crate::dsp::dynamics::OutputDynamics,
+    effect_frame: [f32; 32],
+    effect_at: usize,
     speed_ratio: f64,
     fft: Arc<FftAnalyzer>,
     fft_enabled: bool,
@@ -198,6 +201,12 @@ impl TransitionSource {
         let cancel_samples = (u64::from(shared.sample_rate()) / 20).max(1) * channels;
         fft.set_sample_rate(shared.sample_rate());
         Self {
+            output_effect: crate::dsp::dynamics::OutputDynamics::new(
+                shared.sample_rate(),
+                shared.channels(),
+            ),
+            effect_frame: [0.0; 32],
+            effect_at: 0,
             speed_ratio: 1.0,
             fft_enabled: fft.is_enabled(),
             fft,
@@ -220,11 +229,36 @@ impl TransitionSource {
         }
     }
 
+    /// 在所有混音和设备增益之后处理完整帧，实时回调不分配或锁定
+    pub fn next_output(&mut self, gain: f32) -> f32 {
+        if self.output_effect.bypassed() {
+            return self.next().unwrap_or(0.0) * gain;
+        }
+        let channels = self.channels as usize;
+        if channels > 32 {
+            return 0.0;
+        }
+        if self.effect_at == 0 {
+            for ch in 0..channels {
+                self.effect_frame[ch] = self.next().unwrap_or(0.0) * gain;
+            }
+            self.output_effect
+                .process(&mut self.effect_frame[..channels]);
+        }
+        let result = self.effect_frame[self.effect_at];
+        self.effect_at += 1;
+        if self.effect_at == channels {
+            self.effect_at = 0;
+        }
+        result
+    }
+
     pub fn control(&self) -> TransitionControl {
         self.control.clone()
     }
 
     pub fn begin_callback(&mut self) {
+        self.output_effect.synchronize();
         self.speed_ratio = f64::from(f32::from_bits(
             self.control.speed_ratio.load(Ordering::Acquire),
         ));

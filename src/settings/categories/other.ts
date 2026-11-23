@@ -1,7 +1,14 @@
+import { defineAsyncComponent } from "vue";
 import type { SettingCategory } from "@/types/settings-schema";
-import PlatformAccount from "@/components/settings/custom/PlatformAccount.vue";
-import SkipKeywordsConfig from "@/components/settings/custom/SkipKeywordsConfig.vue";
 import IconLucideSettings from "~icons/lucide/settings";
+
+/** 自定义设置只在对应区域挂载时解析 */
+const PlatformAccount = defineAsyncComponent(
+  () => import("@/components/settings/custom/PlatformAccount.vue"),
+);
+const SkipKeywordsConfig = defineAsyncComponent(
+  () => import("@/components/settings/custom/SkipKeywordsConfig.vue"),
+);
 
 const otherCategory: SettingCategory = {
   id: "other",

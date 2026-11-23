@@ -283,6 +283,25 @@ const buildSplayer = (record: PluginContextRecord, spec: LoadSpec): HostApi => (
     keys: () => hostCall(record, "storage.keys", []) as Promise<string[]>,
   },
 
+  ui: {
+    openSettings: (category) => hostCall(record, "ui.openSettings", [category]) as Promise<void>,
+    navigate: (path) => hostCall(record, "ui.navigate", [path]) as Promise<void>,
+  },
+  audio: {
+    registerEffect: (config) => hostCall(record, "audio.registerEffect", [config]) as Promise<void>,
+    removeEffect: () => hostCall(record, "audio.removeEffect", []) as Promise<void>,
+  },
+  settings: {
+    get: (path) => hostCall(record, "settings.get", [path]),
+    set: (path, value) => hostCall(record, "settings.set", [path, value]) as Promise<void>,
+  },
+  browser: { command: (command, value) => hostCall(record, "browser.command", [command, value]) },
+  assets: { read: (name) => hostCall(record, "assets.read", [name]) as Promise<Uint8Array> },
+  files: {
+    pick: (mode) => hostCall(record, "files.pick", [mode]) as Promise<string | null>,
+    read: (token) => hostCall(record, "files.read", [token]) as Promise<Uint8Array>,
+    write: (token, value) => hostCall(record, "files.write", [token, value]) as Promise<void>,
+  },
   getSetting: <T = unknown>(key: string): T | undefined =>
     record.userSettingsCache[key] as T | undefined,
 
@@ -522,6 +541,7 @@ const loadPluginIntoContext = (spec: LoadSpec): void => {
   const timerApi = makeTimers(record);
   const sandboxGlobal: Record<string, unknown> = {
     splayer,
+    cplayer: splayer,
     Buffer,
     ...timerApi,
     queueMicrotask,

@@ -76,6 +76,9 @@ const handleLogout = async (): Promise<void> => {
   await user.logout();
   toast.success(t("login.logoutDone"));
 };
+
+/** 首次打开才解析LoginDialog，加载时保留操作反馈 */
+const loadLoginDialog = () => import("@/components/modals/LoginDialog.vue");
 </script>
 
 <template>
@@ -179,5 +182,5 @@ const handleLogout = async (): Promise<void> => {
     <template #icon><IconLucideUserRound /></template>
   </SButton>
 
-  <LoginDialog v-model:open="loginOpen" />
+  <SAsyncDialog v-model:open="loginOpen" :loader="loadLoginDialog" />
 </template>

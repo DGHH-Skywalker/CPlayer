@@ -1,6 +1,11 @@
+import { defineAsyncComponent } from "vue";
 import type { SettingCategory } from "@/types/settings-schema";
-import StreamingServerList from "@/components/settings/custom/StreamingServerList.vue";
 import IconLucideLibrary from "~icons/lucide/library";
+
+/** 自定义设置只在对应区域挂载时解析 */
+const StreamingServerList = defineAsyncComponent(
+  () => import("@/components/settings/custom/StreamingServerList.vue"),
+);
 
 const mediaSourceCategory: SettingCategory = {
   id: "mediaSource",

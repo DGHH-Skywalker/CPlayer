@@ -1,6 +1,11 @@
+import { defineAsyncComponent } from "vue";
 import type { SettingCategory } from "@/types/settings-schema";
-import DownloadDirConfig from "@/components/settings/custom/DownloadDirConfig.vue";
 import IconLucideDownload from "~icons/lucide/download";
+
+/** 自定义设置只在对应区域挂载时解析 */
+const DownloadDirConfig = defineAsyncComponent(
+  () => import("@/components/settings/custom/DownloadDirConfig.vue"),
+);
 
 const downloadCategory: SettingCategory = {
   id: "download",

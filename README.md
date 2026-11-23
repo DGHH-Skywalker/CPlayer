@@ -10,6 +10,9 @@ Use the Windows x64 **setup** installer or single-file **portable** EXE from [Gi
 
 ## Features
 
+- **插件中心 / NoiseLimiter**：设置空白处 3 秒内按 5 次 Enter；默认动态限制，覆盖音乐和 B 站音频，支持 JS/ZIP 插件安装与权限管理
+- **哔哩Song 定位**：拖动预览、松手定位、缓冲显示与暂停状态保留
+
 - Normal music playback, local library, streaming servers, lyrics and playlists
 - Optional campus mode with a search home, FIFO requests, duplicate detection and drag sorting
 - Weekly break schedules in Asia/Shanghai, date exceptions and automatic hard stop with queue clearing at class time
@@ -40,3 +43,7 @@ GitHub Actions runs the checks, builds native modules and Windows packages, laun
 ## License and attribution
 
 AGPL-3.0; see [LICENSE](LICENSE) and [NOTICE](NOTICE.md). Original contributions retain their authors' copyrights. The bundled Core retains its [MIT license](vendor/bilikit/LICENSE) and [brand asset terms](vendor/bilikit/BRAND-ASSETS.md). Music, videos and platform accounts remain subject to their providers' rules.
+
+[插件中心与 SDK](docs/plugins/center.md) · [NoiseLimiter](docs/noiselimiter.md) · [v1.4.0](docs/releases/v1.4.0.md)
+
+[渐进启动与按需加载](docs/startup-loading.md)：先准备播放与歌词，优先分发历史歌曲恢复，设置和非核心弹窗按点击加载。

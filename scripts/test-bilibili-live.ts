@@ -1,3 +1,5 @@
+import { registerDynamics } from "../electron/main/services/audioEffects";
+import { DEFAULT_DYNAMICS } from "../shared/types/audioEffects";
 import assert from "node:assert/strict";
 import { app, BrowserWindow, WebContentsView, session } from "electron";
 import { mkdir, writeFile } from "node:fs/promises";
@@ -46,6 +48,7 @@ const run = async (): Promise<void> => {
   );
   const ending = process.env.CPLAYER_TEST_ENDING === "true";
   const token = "carbonv-live-ending";
+  registerDynamics("live-noise", DEFAULT_DYNAMICS);
   await loader.install(core, noLogin, ending ? { token, url, autoPlay: true } : null);
   try {
     await wc.loadURL(url);
@@ -102,6 +105,24 @@ const run = async (): Promise<void> => {
       result.videos.some((v: { height: number }) => v.height >= 1080),
       "所测视频没有达到 1080P",
     );
+  await wc.executeJavaScript(
+    "document.querySelectorAll('video,audio').forEach(v=>v.muted=false)",
+    true,
+  );
+  for (let attempt = 0; attempt < 100; attempt++) {
+    const graph = await wc.executeJavaScript("window.__carbonvDynamics?.status()");
+    if (graph?.reports?.some((r) => r?.state === "active" && r.peak > 0)) break;
+    await new Promise((done) => setTimeout(done, 100));
+  }
+  const audioGraph = await wc.executeJavaScript("window.__carbonvDynamics?.status()");
+  console.log(JSON.stringify({ noiseLimiter: audioGraph, core, noLogin }));
+  await writeFile("test-results/bilibili-noiselimiter.json", JSON.stringify(audioGraph, null, 2));
+  assert.ok(
+    audioGraph?.reports?.some(
+      (r) => r?.state === "active" && r.peak > 0 && r.peak <= 10 ** (-12 / 20) + 1e-5,
+    ),
+    "真实 B 站音频未经过有效的 WASM 保护",
+  );
   // 使用相同的原生遮挡操作验证真实站点不会因搜索焦点转移暂停
   const beforeFocus = await wc.executeJavaScript("document.querySelector('video').currentTime");
   wc.setBackgroundThrottling(false);

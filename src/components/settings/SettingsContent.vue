@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { consumePluginCenterKey, syncPluginCenter } from "@/settings/pluginCenter";
 import { settingsSchema } from "@/settings/schema";
 import { useSettingsDialog } from "@/settings/useSettingsDialog";
 import { useSettingsStore } from "@/stores/settings";
@@ -17,7 +18,13 @@ const highlightKey = ref(initialHighlight.value);
 const scrollRef = ref<HTMLElement>();
 const isSearchActive = ref(false);
 
-const activeCategory = computed(() => settingsSchema.find((c) => c.id === activeId.value));
+const activeCategory = computed(() =>
+  settingsSchema.find((c) => c.id === activeId.value && (!c.visible || c.visible())),
+);
+/** 设置容器接收隐藏入口快捷键 */
+const onCenterKey = async (event: KeyboardEvent): Promise<void> => {
+  if (await consumePluginCenterKey(event)) onCategorySelect("plugins");
+};
 
 /** 计算每个 section 的全局起始索引 */
 const sectionStartIndices = computed(() => {
@@ -30,11 +37,36 @@ const sectionStartIndices = computed(() => {
   return indices;
 });
 
-const onCategorySelect = (id: string) => {
+let pendingHighlight: { categoryId: string; keys: string[] } | undefined;
+let highlightTimer: ReturnType<typeof setTimeout> | undefined;
+
+/**
+ * 选中分类并取消上一次定位，异步内容就绪后由占位层移交显示
+ * @param id - 设置分类标识
+ */
+const onCategorySelect = (id: string): void => {
   activeId.value = id;
   highlightKey.value = undefined;
+  pendingHighlight = undefined;
+  clearTimeout(highlightTimer);
   rememberCategory(id);
   nextTick(() => scrollRef.value?.scrollTo({ top: 0 }));
+};
+
+/** 在异步设置内容实际挂载后定位，避免慢磁盘上固定延时失效 */
+const locateHighlight = async (): Promise<void> => {
+  await nextTick();
+  const target = pendingHighlight;
+  if (!target || target.categoryId !== activeId.value) return;
+  const el = target.keys.map((key) => document.getElementById(`setting-${key}`)).find(Boolean);
+  if (!el) return;
+  pendingHighlight = undefined;
+  highlightKey.value = el.id.slice("setting-".length);
+  el.scrollIntoView({ block: "center", behavior: "smooth" });
+  clearTimeout(highlightTimer);
+  highlightTimer = setTimeout(() => {
+    highlightKey.value = undefined;
+  }, 2500);
 };
 
 /**
@@ -43,34 +75,36 @@ const onCategorySelect = (id: string) => {
  * @param itemKey - 设置项键名
  * @param parentKeys - 从外到内的父项键名
  */
-const onSearchSelect = (categoryId: string, itemKey: string, parentKeys: string[] = []) => {
+const onSearchSelect = (categoryId: string, itemKey: string, parentKeys: string[] = []): void => {
+  clearTimeout(highlightTimer);
   highlightKey.value = itemKey;
-  if (activeId.value !== categoryId) {
-    activeId.value = categoryId;
-  }
-  nextTick(() => {
-    setTimeout(() => {
-      const el = [itemKey, ...parentKeys.toReversed()]
-        .map((key) => document.getElementById(`setting-${key}`))
-        .find((element) => element !== null);
-      if (el) highlightKey.value = el.id.slice("setting-".length);
-      el?.scrollIntoView({ block: "center", behavior: "smooth" });
-      setTimeout(() => {
-        highlightKey.value = undefined;
-      }, 2500);
-    }, 100);
-  });
+  pendingHighlight = { categoryId, keys: [itemKey, ...parentKeys.toReversed()] };
+  activeId.value = categoryId;
+  void locateHighlight();
 };
 
-onMounted(() => {
+onMounted(async () => {
+  await syncPluginCenter();
+  if (!activeCategory.value) activeId.value = "general";
+  document.querySelector<HTMLElement>("[data-settings-content]")?.focus();
   if (initialHighlight.value) {
     onSearchSelect(initialCategory.value, initialHighlight.value, initialParentKeys.value);
   }
 });
+onBeforeUnmount(() => {
+  pendingHighlight = undefined;
+  clearTimeout(highlightTimer);
+  void window.api.plugins.centerReset();
+});
 </script>
 
 <template>
-  <div class="flex h-full overflow-hidden">
+  <div
+    data-settings-content
+    tabindex="-1"
+    class="flex h-full overflow-hidden outline-none"
+    @keydown.capture="onCenterKey"
+  >
     <!-- 左侧 -->
     <div class="w-70 shrink-0 flex flex-col bg-surface-panel p-5">
       <h2 class="text-2xl font-bold mb-1 px-1">{{ t("settings.title") }}</h2>
@@ -113,22 +147,33 @@ onMounted(() => {
       ref="scrollRef"
       class="flex-1 overflow-y-auto [scrollbar-gutter:stable] bg-surface py-6 px-8"
     >
-      <div v-if="activeCategory" :key="activeCategory.id" class="animate-fade-in">
-        <component
-          :is="activeCategory.component"
-          v-if="activeCategory.component"
-          :highlight-key="highlightKey"
-        />
-        <template v-else>
-          <SettingsSection
-            v-for="(sec, si) in activeCategory.sections"
-            :key="sec.id"
-            :section="sec"
+      <Suspense v-if="activeCategory" :key="activeCategory.id" @resolve="locateHighlight">
+        <div class="animate-fade-in">
+          <component
+            :is="activeCategory.component"
+            v-if="activeCategory.component"
             :highlight-key="highlightKey"
-            :start-index="sectionStartIndices[si] ?? 0"
           />
+          <template v-else>
+            <SettingsSection
+              v-for="(sec, si) in activeCategory.sections"
+              :key="sec.id"
+              :section="sec"
+              :highlight-key="highlightKey"
+              :start-index="sectionStartIndices[si] ?? 0"
+            />
+          </template>
+        </div>
+        <template #fallback>
+          <div
+            role="status"
+            class="flex items-center justify-center min-h-32 gap-2 text-on-surface-variant"
+          >
+            <SLoading class="size-5 text-primary" />
+            {{ t("common.loading") }}
+          </div>
         </template>
-      </div>
+      </Suspense>
     </div>
   </div>
 </template>

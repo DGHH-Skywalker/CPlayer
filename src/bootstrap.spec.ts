@@ -4,6 +4,7 @@ import { flushPromises } from "@vue/test-utils";
 const application = vi.hoisted(() => ({
   mountApplication: vi.fn(),
   startApplication: vi.fn(),
+  startPlayback: vi.fn(),
 }));
 vi.mock("./main", () => application);
 
@@ -33,6 +34,9 @@ beforeEach(() => {
     .fn<Element["animate"]>()
     .mockReturnValue({ finished: fade, cancel: vi.fn() } as unknown as Animation);
   document.getElementById("app-loading")!.animate = animate;
+  application.startPlayback.mockReset();
+  application.startPlayback.mockResolvedValue(undefined);
+  application.startApplication.mockClear();
   application.mountApplication.mockReturnValue(
     new Promise<void>((resolve) => (finishMount = resolve)),
   );
@@ -50,13 +54,14 @@ afterEach(() => {
 });
 
 describe("单窗口启动过渡", () => {
-  it("首页先挂载时等待完整入场，淡出后才解锁界面并恢复播放", async () => {
+  it("核心就绪立即恢复播放与歌词，完整入场后才解锁界面和加载热键", async () => {
     await import("./bootstrap");
     await vi.waitFor(() => expect(application.mountApplication).toHaveBeenCalledOnce());
     expect(ready).toHaveBeenCalledWith();
     finishMount();
     await flushPromises();
     expect(animate).not.toHaveBeenCalled();
+    expect(application.startPlayback).toHaveBeenCalledOnce();
     finishEntrance();
     await flushPromises();
     expect(animate).toHaveBeenCalledOnce();
@@ -109,6 +114,7 @@ describe("单窗口启动过渡", () => {
     expect(document.getElementById("app-loading")).not.toBeNull();
     expect(animate).not.toHaveBeenCalled();
     expect(application.startApplication).not.toHaveBeenCalled();
+    expect(application.startPlayback).not.toHaveBeenCalled();
     finishEntrance();
   });
 });

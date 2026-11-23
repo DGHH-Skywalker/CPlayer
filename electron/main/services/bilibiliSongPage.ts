@@ -19,12 +19,14 @@ export const biliSongBootstrap = (song: BilibiliSongPage | null): string => Stri
   if (path(location) !== path(expected) || (new URLSearchParams(location.search).get('p') || '1') !== (expected.searchParams.get('p') || '1')) return;
   let finished = false, pausedByUser = !song.autoPlay;
   let activeVideo = null, last = null, lastTime = 0;
+  let seekId = "", pendingSeek = null;
   const originalPlay = HTMLMediaElement.prototype.play;
   const loop = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'loop');
-  const emit = (state, video) => {
+  const ranges = value => { const result=[];try{for(let i=0;i<Math.min(value?.length||0,16);i++)result.push([value.start(i)*1000,value.end(i)*1000]);}catch{}return result; };
+  const emit = (state, video, phase, reason) => {
     const position = Number.isFinite(video?.currentTime) ? video.currentTime : last?.position || 0;
     const duration = Number.isFinite(video?.duration) ? video.duration : last?.duration || 0;
-    try { carbonvMedia(JSON.stringify({ song: { token: song.token, state, position: position * 1000, duration: duration * 1000 } })); } catch {}
+    try { carbonvMedia(JSON.stringify({ song: { token: song.token, state, position: position * 1000, duration: duration * 1000, seekId, seekPhase:phase || (pendingSeek!==null ? "seeking" : undefined), paused:!!video?.paused, buffering:!!video?.seeking || (!video?.paused && video?.readyState<3), buffered:ranges(video?.buffered),seekable:ranges(video?.seekable),reason } })); } catch {}
   };
   const pauseAll = mute => {
     const media = new Set(document.querySelectorAll('video,audio'));
@@ -74,18 +76,26 @@ export const biliSongBootstrap = (song: BilibiliSongPage | null): string => Stri
     if (event.target instanceof HTMLVideoElement && changedAtEnd(event.target)) finish(activeVideo);
     if (finished || pausedByUser) { event.stopImmediatePropagation(); event.target.pause(); }
   }, true);
-  window.__carbonvSongControl = (command, position, token) => {
+  const seekVideo = video => {
+    if(!video || pendingSeek===null || video.readyState===0)return;
+    last=null;
+    const target=Math.max(0,Math.min(Number.isFinite(video.duration)?video.duration:pendingSeek,pendingSeek));
+    try{video.currentTime=target;emit(video.paused?'paused':'playing',video,'seeking');if(!video.seeking&&Math.abs(video.currentTime-target)<0.1){pendingSeek=null;emit(video.paused?'paused':'playing',video,'seeked');}}
+    catch{pendingSeek=null;emit(video.paused?'paused':'playing',video,'failed');}
+  };
+  window.__carbonvSongControl = (command, position, token, requestId) => {
     if (token !== song.token) return;
     const video = activeVideo?.isConnected ? activeVideo : document.querySelector('video');
     if (command === 'stop') { finished = true; pausedByUser = true; pauseAll(true); observer.disconnect(); return; }
     if (finished) return;
     if (command === 'pause') { pausedByUser = true; pauseAll(false); emit('paused', video); }
     if (command === 'play') { pausedByUser = false; if (video) originalPlay.call(video).catch(() => emit('paused', video)); }
-    if (command === 'seek' && video && Number.isFinite(position)) { last = null; video.currentTime = Math.max(0, position / 1000); }
+    if(command==='inspect'){if(requestId!==seekId)return;const failed=!!video?.seeking;pendingSeek=null;emit(video?.paused?'paused':'playing',video,failed?'failed':'seeked');}
+    if (command === 'seek' && Number.isFinite(position)) { seekId=requestId || '';pendingSeek=Math.max(0,position/1000);if(video)pausedByUser=video.paused;last=null;seekVideo(video); }
   };
-  for (const name of ['playing', 'pause', 'loadedmetadata', 'timeupdate', 'emptied', 'error']) window.addEventListener(name, event => {
+  for (const name of ['playing', 'pause', 'loadedmetadata', 'timeupdate', 'emptied', 'error','seeking','seeked','waiting','canplay']) window.addEventListener(name, event => {
     const video = event.target;
-    if (!(video instanceof HTMLVideoElement) || finished) return;
+    if (!(video instanceof HTMLVideoElement) || !video.isConnected || finished) return;
     unlockLoop(video);
     if ((name === 'emptied' && video === activeVideo && nearEnd()) || video.ended) { event.stopImmediatePropagation(); finish(video); return; }
     if (name === 'playing') {
@@ -95,9 +105,14 @@ export const biliSongBootstrap = (song: BilibiliSongPage | null): string => Stri
     if (name === 'pause' && video.isConnected && (!activeVideo || video === activeVideo)) emit('paused', video);
     if (name === 'error' && video.error) emit('error', video);
     if (name === 'loadedmetadata') {
-      if (!pausedByUser) { emit('loading', video); originalPlay.call(video).catch(() => { if (video.paused) emit('paused', video); }); }
+      if(pendingSeek!==null){seekVideo(video);return;}
+      if (!pausedByUser) { emit('loading', video,undefined,'metadata'); originalPlay.call(video).catch(() => { if (video.paused) emit('paused', video); }); }
       else emit('paused', video);
     }
+    if(name==='seeking')emit(video.paused?'paused':'loading',video,'seeking');
+    if(name==='seeked' && !video.seeking){pendingSeek=null;remember(video);emit(video.paused?'paused':'playing',video,'seeked');}
+    if(name==='waiting')emit(video.paused?'paused':'loading',video);
+    if(name==='canplay')emit(video.paused?'paused':'playing',video);
     if (name === 'timeupdate') {
       remember(video);
       if (performance.now() - lastTime > 250) { lastTime = performance.now(); emit(video.paused ? 'paused' : 'playing', video); }

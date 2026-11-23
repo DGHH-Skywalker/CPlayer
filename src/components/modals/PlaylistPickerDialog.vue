@@ -4,7 +4,6 @@ import type { ContentScope } from "@/types/collection";
 import { usePlaylistStore } from "@/stores/playlist";
 import { useUserStore } from "@/stores/user";
 import { toast } from "@/composables/useToast";
-import PlaylistCreateDialog from "./PlaylistCreateDialog.vue";
 import IconLucidePlus from "~icons/lucide/plus";
 
 const props = defineProps<{
@@ -83,6 +82,9 @@ const handlePick = async (playlistId: string): Promise<void> => {
     submitting.value = false;
   }
 };
+
+/** 首次打开才解析PlaylistCreateDialog，加载时保留操作反馈 */
+const loadPlaylistCreateDialog = () => import("@/components/modals/PlaylistCreateDialog.vue");
 </script>
 
 <template>
@@ -128,5 +130,5 @@ const handlePick = async (playlistId: string): Promise<void> => {
       <SButton variant="tertiary" @click="close">{{ t("common.cancel") }}</SButton>
     </template>
   </SDialog>
-  <PlaylistCreateDialog v-model:open="createDialogOpen" :mode="mode" />
+  <SAsyncDialog v-model:open="createDialogOpen" :loader="loadPlaylistCreateDialog" :mode="mode" />
 </template>

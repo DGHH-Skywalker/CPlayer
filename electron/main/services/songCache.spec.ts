@@ -54,6 +54,34 @@ describe("歌曲预载缓存生命周期", () => {
     await fs.rm(state.directory, { recursive: true, force: true });
   });
 
+  it("启动只准备服务，延后维护不会删除正在写入的新缓存", async () => {
+    let finish!: (response: Response) => void;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        () =>
+          new Promise<Response>((done) => {
+            finish = done;
+          }),
+      ),
+    );
+    const cache = await import("./songCache");
+    await fs.writeFile(path.join(state.directory, "orphan.part"), "old");
+    cache.init();
+    expect(await fs.readFile(path.join(state.directory, "orphan.part"), "utf8")).toBe("old");
+    const download = cache.fetchAsync("new", "netease", "https://server/audio");
+    await vi.waitFor(() => expect(finish).toBeTypeOf("function"));
+    const crypto = await import("node:crypto");
+    const name = crypto.createHash("sha1").update("new").digest("hex").slice(0, 16) + ".bin.part";
+    await fs.writeFile(path.join(state.directory, name), "live");
+    await cache.cleanupStartupFiles();
+    expect(await fs.readFile(path.join(state.directory, name), "utf8")).toBe("live");
+    await expect(fs.stat(path.join(state.directory, "orphan.part"))).rejects.toThrow();
+    finish(audioResponse());
+    expect(await download).not.toBeNull();
+    expect(state.rows.has("new")).toBe(true);
+  });
+
   it("流媒体缓存只在主进程解析认证地址", async () => {
     const fetcher = vi.fn(async (_url: string, _options: RequestInit) => audioResponse());
     vi.stubGlobal("fetch", fetcher);

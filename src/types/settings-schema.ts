@@ -106,6 +106,8 @@ export interface SettingSection {
 
 /** 设置分类 */
 export interface SettingCategory {
+  /** 按当前应用状态决定分类是否可见 */
+  visible?: () => boolean;
   /** i18n key: settings.group.{id}，同时作为菜单 key */
   id: string;
   icon: Component;

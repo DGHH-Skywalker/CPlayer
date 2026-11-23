@@ -60,6 +60,8 @@ const {
 const showComments = (): void => {
   if (displayTrack.value) status.showComments(displayTrack.value);
 };
+/** 需要选择歌单时再解析管理界面 */
+const loadPlaylistPickerDialog = () => import("@/components/modals/PlaylistPickerDialog.vue");
 </script>
 
 <template>
@@ -225,5 +227,10 @@ const showComments = (): void => {
       <Toolbar cover />
     </div>
   </div>
-  <PlaylistPickerDialog v-model:open="pickerOpen" :mode="pickerMode" :tracks="pickerTracks" />
+  <SAsyncDialog
+    v-model:open="pickerOpen"
+    :loader="loadPlaylistPickerDialog"
+    :mode="pickerMode"
+    :tracks="pickerTracks"
+  />
 </template>

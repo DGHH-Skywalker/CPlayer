@@ -5,6 +5,7 @@ import { toast } from "@/composables/useToast";
 import { isExternalUrl, openExternal } from "@/utils/url";
 
 defineOptions({ inheritAttrs: false });
+defineProps<{ compact?: boolean }>();
 
 const { t } = useI18n();
 const pluginsStore = usePluginsStore();
@@ -211,7 +212,9 @@ const refreshMarket = async (): Promise<void> => {
           <IconLucidePuzzle class="size-6" />
         </div>
         <div class="text-sm text-on-surface-variant">{{ t("settings.plugins.empty") }}</div>
-        <div class="text-xs text-on-surface-variant/60">{{ t("settings.plugins.emptyHint") }}</div>
+        <div v-if="!compact" class="text-xs text-on-surface-variant/60">
+          {{ t("settings.plugins.emptyHint") }}
+        </div>
       </div>
 
       <div class="grid gap-2.5 [grid-template-columns:repeat(auto-fill,minmax(220px,1fr))]">
@@ -235,6 +238,7 @@ const refreshMarket = async (): Promise<void> => {
 
     <!-- 发布入口 -->
     <div
+      v-if="!compact"
       class="flex flex-wrap items-center justify-center gap-x-1.5 gap-y-0.5 pt-4 text-xs text-on-surface-variant/60"
     >
       <span>{{ t("settings.plugins.publishHint") }}</span>
@@ -270,7 +274,6 @@ const refreshMarket = async (): Promise<void> => {
     <SDialog
       v-model:open="settingsDialogOpen"
       :title="settingsDialogInfo?.manifest.name ?? ''"
-      :description="t('settings.plugins.configSubtitle')"
       width="520px"
     >
       <PluginSettingsForm

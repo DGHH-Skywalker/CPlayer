@@ -8,8 +8,8 @@
  * - 陈旧消息守卫：死进程的迟到消息按 generation 丢弃
  */
 
-import path from "node:path";
-import { utilityProcess, type UtilityProcess, app } from "electron";
+import { appFile } from "@main/utils/appFiles";
+import { utilityProcess, type UtilityProcess } from "electron";
 import type {
   HostCallMethod,
   PlaybackEventKind,
@@ -46,8 +46,8 @@ export interface PluginHostCallbacks {
 /** loadPlugin 入参（即 loadPlugin 消息去掉 kind） */
 export type PluginLoadSpec = Omit<Extract<SandboxIn, { kind: "loadPlugin" }>, "kind">;
 
-const resolveWorkerEntry = (): string =>
-  path.join(app.getAppPath(), "out", "main", "host.worker.js");
+/** 解析独立构建的宿主入口，不依赖共享 chunk 所在目录 */
+const resolveWorkerEntry = (): string => appFile("out", "main", "host.worker.js");
 
 class PluginHost {
   private child: UtilityProcess | null = null;

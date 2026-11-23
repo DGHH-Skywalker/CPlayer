@@ -2,6 +2,7 @@
  * 听歌识曲指纹计算入口：管理 AFP Worker 的创建与请求分发。
  */
 
+import { appFile } from "@main/utils/appFiles";
 import fs from "node:fs";
 import path from "node:path";
 import { Worker } from "node:worker_threads";
@@ -37,9 +38,10 @@ const resolveAfpDir = (): string | null => {
   return files.every((file) => fs.existsSync(path.join(dir, file))) ? dir : null;
 };
 
+/** 按固定构建入口懒创建指纹线程，不受主进程代码分块影响 */
 const getWorker = (): Worker => {
   if (worker) return worker;
-  const entry = path.join(__dirname, "fingerprint.worker.js");
+  const entry = appFile("out", "main", "fingerprint.worker.js");
   const next = new Worker(entry, {
     workerData: { afpDir: resolveAfpDir() },
   });

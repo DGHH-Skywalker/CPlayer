@@ -44,6 +44,10 @@ const GRANT_ICONS: Record<PluginGrant, Component> = {
   ui: IconMenu,
   library: IconMenu,
   api: IconGlobe,
+  settings: IconMenu,
+  browser: IconGlobe,
+  dsp: IconGamepad,
+  files: IconMenu,
 };
 
 /** ready 时的状态对象（含 sources/events/controls/settings/ui） */
@@ -59,9 +63,11 @@ const hasControls = computed(() => !!ready.value?.controls);
 const settingsCount = computed(() => ready.value?.settings?.length ?? 0);
 const menusCount = computed(() => ready.value?.menus?.length ?? 0);
 
+/** 格式化插件更新时间 */
 const fmtDate = (ms?: number): string =>
   typeof ms === "number" ? new Date(ms).toLocaleDateString() : "—";
 
+/** 同步详情弹窗状态 */
 const setOpen = (value: boolean): void => emit("update:open", value);
 </script>
 
@@ -92,21 +98,6 @@ const setOpen = (value: boolean): void => emit("update:open", value);
         </div>
       </div>
 
-      <!-- 简介 -->
-      <section class="flex flex-col gap-1.5">
-        <h4 class="text-xs font-medium text-on-surface-variant/60">
-          {{ t("settings.plugins.detail.intro") }}
-        </h4>
-        <p
-          class="m-0 text-sm leading-relaxed"
-          :class="
-            info.manifest.description ? 'text-on-surface-variant' : 'text-on-surface-variant/50'
-          "
-        >
-          {{ info.manifest.description || t("settings.plugins.detail.noDescription") }}
-        </p>
-      </section>
-
       <!-- 权限 -->
       <section class="flex flex-col gap-1.5">
         <h4 class="text-xs font-medium text-on-surface-variant/60">
@@ -123,9 +114,6 @@ const setOpen = (value: boolean): void => emit("update:open", value);
               <label :for="`plugin-permission-${info.manifest.id}-${row.key}`" class="font-medium">
                 {{ t(`settings.plugins.grant.${row.key}.label`) }}
               </label>
-              <p class="m-0 text-xs leading-relaxed text-on-surface-variant/60">
-                {{ t(`settings.plugins.grant.${row.key}.desc`) }}
-              </p>
             </div>
             <SSwitch
               :id="`plugin-permission-${info.manifest.id}-${row.key}`"

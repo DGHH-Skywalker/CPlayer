@@ -1,5 +1,6 @@
 /** 显示启动层并在首屏就绪后移交播放控制，避免静态导入 Vue 或业务模块 */
 export const bootstrap = async (): Promise<void> => {
+  performance.mark("carbonv:bootstrap-start");
   const splash = document.getElementById("app-loading")!;
   const root = document.getElementById("app")!;
   const logo = splash.querySelector<HTMLImageElement>(".splash-logo")!;
@@ -25,7 +26,10 @@ export const bootstrap = async (): Promise<void> => {
       requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
     );
     const application = await import("./main");
-    await Promise.all([application.mountApplication(), entrance]);
+    await Promise.all([
+      application.mountApplication().then(() => application.startPlayback()),
+      entrance,
+    ]);
     // Vue 更新完成不代表浏览器已布局，保留一帧让底层界面完成绘制。
     await new Promise<void>((resolve) =>
       requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
@@ -42,6 +46,7 @@ export const bootstrap = async (): Promise<void> => {
     root.removeAttribute("aria-hidden");
     await window.api.window.startupComplete();
     application.startApplication();
+    performance.mark("carbonv:startup-complete");
   } finally {
     document.removeEventListener("visibilitychange", syncVisibility);
   }

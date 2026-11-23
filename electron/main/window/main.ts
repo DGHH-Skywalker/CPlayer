@@ -1,5 +1,5 @@
 import { app, BrowserWindow, dialog, shell } from "electron";
-import { join } from "path";
+import { appFile } from "@main/utils/appFiles";
 import { is } from "@electron-toolkit/utils";
 import { createWindow } from "./create";
 import { initThumbar } from "@main/services/thumbar";
@@ -134,7 +134,7 @@ export const createMainWindow = (): BrowserWindow => {
     const base = process.env["ELECTRON_RENDERER_URL"];
     loading = mainWindow.loadURL(`${base}#${initialHash}`);
   } else {
-    loading = mainWindow.loadFile(join(__dirname, "../renderer/index.html"), { hash: initialHash });
+    loading = mainWindow.loadFile(appFile("out", "renderer", "index.html"), { hash: initialHash });
   }
   void loading.catch((error) => {
     if (isAppQuitting()) return;

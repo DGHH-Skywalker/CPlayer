@@ -15,6 +15,10 @@ import {
 const route = useRoute();
 const router = useRouter();
 const status = useStatusStore();
+const offPluginNavigate = window.api.plugins.onNavigate((path) => {
+  void router.push(path);
+});
+onBeforeUnmount(offPluginNavigate);
 const settings = useSettingsStore();
 const { sidebarCollapsed } = useResponsiveLayout();
 
@@ -25,6 +29,14 @@ useExternalFileHandler();
 /** 有歌曲信息时显示播放栏 */
 const showPlayerBar = computed(() => !!useMediaStore().track);
 const { isPlayerExpanded } = storeToRefs(status);
+
+/** 按需载入评论弹窗，首次加载期间仍可关闭 */
+const loadMusicComments = () => import("@/components/modals/MusicCommentsDialog.vue");
+/** 按需读取音频输出信息界面 */
+const loadAudioInfo = () => import("@/components/modals/AudioInfoDialog.vue");
+const SPerformanceMonitor = defineAsyncComponent(
+  () => import("@/components/SPerformanceMonitor.vue"),
+);
 
 /** 播放页展开状态同步与懒加载 */
 const FullPlayer = defineAsyncComponent(() => import("@/components/player/FullPlayer/index.vue"));
@@ -225,9 +237,8 @@ const playerBarInnerClass = computed(() => {
   <FullPlayer v-if="fullPlayerLoaded" @vue:mounted="fullPlayerReady = true" />
   <!-- 全局设置 -->
   <SettingsDialog />
-  <!-- 更新弹窗 -->
   <!-- 评论弹窗 -->
-  <MusicCommentsDialog />
+  <SAsyncDialog v-model:open="status.commentsOpen" :loader="loadMusicComments" />
   <!-- 输出信息弹窗 -->
-  <AudioInfoDialog />
+  <SAsyncDialog v-model:open="status.audioInfoOpen" :loader="loadAudioInfo" />
 </template>

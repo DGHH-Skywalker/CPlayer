@@ -1,7 +1,14 @@
+import { defineAsyncComponent } from "vue";
 import type { SettingCategory } from "@/types/settings-schema";
-import PluginImport from "@/components/settings/custom/PluginImport.vue";
-import PluginList from "@/components/settings/custom/PluginList.vue";
 import IconLucidePuzzle from "~icons/lucide/puzzle";
+
+/** 自定义设置只在对应区域挂载时解析 */
+const PluginImport = defineAsyncComponent(
+  () => import("@/components/settings/custom/PluginImport.vue"),
+);
+const PluginList = defineAsyncComponent(
+  () => import("@/components/settings/custom/PluginList.vue"),
+);
 
 const pluginsCategory: SettingCategory = {
   id: "plugins",

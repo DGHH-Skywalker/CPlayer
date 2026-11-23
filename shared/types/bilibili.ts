@@ -7,6 +7,14 @@ export interface BilibiliSongEvent {
   state: PlayerState | "ended" | "error";
   position: number;
   duration: number;
+  seekId?: string;
+  seekOrder?: number;
+  seekPhase?: "seeking" | "seeked" | "failed";
+  buffering?: boolean;
+  paused?: boolean;
+  reason?: "metadata";
+  buffered?: [number, number][];
+  seekable?: [number, number][];
   error?: string;
 }
 
@@ -36,10 +44,11 @@ export interface BilibiliApi {
   song(): Promise<Track>;
   playSong(track: Track, token: string, autoPlay: boolean): Promise<void>;
   controlSong(
-    command: "play" | "pause" | "stop" | "seek",
+    command: "play" | "pause" | "stop" | "seek" | "inspect",
     token: string,
     position?: number,
-  ): Promise<void>;
+    seekId?: string,
+  ): Promise<{ seekId?: string; seekOrder?: number } | void>;
   onSong(callback: (event: BilibiliSongEvent) => void): () => void;
   command(command: string, value?: unknown): Promise<BilibiliState>;
   onState(callback: (state: BilibiliState) => void): () => void;

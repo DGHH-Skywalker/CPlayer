@@ -1,0 +1,7 @@
+{
+  "id": "carbonv.noise-limiter",
+  "version": "1.0.0",
+  "entry": "plugin.js",
+  "hostApi": 6,
+  "wasmSha256": "1c26cef14f401a2e37d0de20d03298b00d5604b6b4dff409219a5a4d19363935"
+}

@@ -1,7 +1,12 @@
+import { defineAsyncComponent } from "vue";
 import type { SettingCategory } from "@/types/settings-schema";
 import { LOCALES } from "@shared/types/settings";
-import StorageManager from "@/components/settings/custom/StorageManager.vue";
 import IconLucideCog from "~icons/lucide/cog";
+
+/** 自定义设置只在对应区域挂载时解析 */
+const StorageManager = defineAsyncComponent(
+  () => import("@/components/settings/custom/StorageManager.vue"),
+);
 
 const generalCategory: SettingCategory = {
   id: "general",

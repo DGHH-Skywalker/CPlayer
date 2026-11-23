@@ -1,10 +1,17 @@
+import { defineAsyncComponent } from "vue";
 import type { SettingCategory } from "@/types/settings-schema";
 import { useSettingsStore } from "@/stores/settings";
 import { toast } from "@/composables/useToast";
 import i18n from "@/i18n";
-import ExternalApiStatusCard from "@/components/settings/custom/ExternalApiStatusCard.vue";
-import LastfmPanel from "@/components/settings/custom/LastfmPanel.vue";
 import IconLucideGlobe from "~icons/lucide/globe";
+
+/** 自定义设置只在对应区域挂载时解析 */
+const ExternalApiStatusCard = defineAsyncComponent(
+  () => import("@/components/settings/custom/ExternalApiStatusCard.vue"),
+);
+const LastfmPanel = defineAsyncComponent(
+  () => import("@/components/settings/custom/LastfmPanel.vue"),
+);
 
 const servicesCategory: SettingCategory = {
   id: "services",

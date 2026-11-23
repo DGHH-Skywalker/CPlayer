@@ -27,6 +27,7 @@ export const searchSettings = (
   if (!keyword) return [];
   const out: SettingSearchResult[] = [];
   for (const cat of settingsSchema) {
+    if (cat.visible && !cat.visible()) continue;
     /**
      * 检索设置项及子项
      * @param items - 当前层设置项

@@ -1,6 +1,5 @@
 import { BrowserWindow, BrowserWindowConstructorOptions, nativeTheme } from "electron";
-import { join } from "path";
-import icon from "../../../public/icons/favicon.png?asset";
+import { appFile } from "@main/utils/appFiles";
 
 /**
  * 获取默认窗口配置
@@ -13,9 +12,9 @@ const getDefaultOptions = (): BrowserWindowConstructorOptions => ({
   autoHideMenuBar: true,
   show: false,
   backgroundColor: nativeTheme.shouldUseDarkColors ? "#101014" : "#f6f6f6",
-  icon,
+  icon: appFile("public", "icons", "favicon.png"),
   webPreferences: {
-    preload: join(__dirname, "../preload/index.mjs"),
+    preload: appFile("out", "preload", "index.mjs"),
     sandbox: false,
     // 关闭 WebGL
     webgl: false,

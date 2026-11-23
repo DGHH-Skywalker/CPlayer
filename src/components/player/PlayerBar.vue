@@ -15,6 +15,7 @@ const settings = useSettingsStore();
 const media = useMediaStore();
 const fav = useFavorite();
 const { position, duration } = storeToRefs(status);
+const isBilibili = computed(() => media.track?.source === "bilibili");
 const { formatTooltip, snapToNearestLyric } = useProgressLyric();
 
 const { isCompact } = useResponsiveLayout();
@@ -45,6 +46,8 @@ const { items: menuItems, handleSelect: onMenuSelect } = useTrackMenu(toRef(medi
   onAddToPlaylist: (track) => openPicker([track]),
   onDownload: (track, quality) => void enqueueDownload(track, { quality }),
 });
+/** 需要选择歌单时再解析管理界面 */
+const loadPlaylistPickerDialog = () => import("@/components/modals/PlaylistPickerDialog.vue");
 </script>
 
 <template>
@@ -98,10 +101,12 @@ const { items: menuItems, handleSelect: onMenuSelect } = useTrackMenu(toRef(medi
           </template>
         </TrackInfo>
         <div class="contents lt-md:hidden">
-          <PlayerTimeInfo compact />
+          <PlayerTimeInfo v-if="!isBilibili" compact />
         </div>
       </div>
+      <BilibiliProgress v-if="isBilibili" />
       <SSlider
+        v-else
         :model-value="position"
         :glow="status.transitioning"
         :min="0"
@@ -122,7 +127,8 @@ const { items: menuItems, handleSelect: onMenuSelect } = useTrackMenu(toRef(medi
   </div>
   <!-- 默认模式 -->
   <div v-else class="relative h-full">
-    <div class="absolute left-0 right-0 top-0 -translate-y-1/2 z-10">
+    <BilibiliProgress v-if="isBilibili" class="absolute left-3 right-3 top-0 z-10" />
+    <div v-else class="absolute left-0 right-0 top-0 -translate-y-1/2 z-10">
       <SSlider
         :model-value="position"
         :glow="status.transitioning"
@@ -138,7 +144,10 @@ const { items: menuItems, handleSelect: onMenuSelect } = useTrackMenu(toRef(medi
         <template #popover="{ value }">{{ formatTooltip(value) }}</template>
       </SSlider>
     </div>
-    <div class="grid grid-cols-[1fr_auto_1fr] items-center h-full px-3 gap-3">
+    <div
+      class="grid grid-cols-[1fr_auto_1fr] items-center h-full px-3 gap-3"
+      :class="isBilibili ? 'pt-6' : ''"
+    >
       <TrackInfo>
         <template #title-trailing>
           <div class="flex items-center shrink-0">
@@ -185,10 +194,15 @@ const { items: menuItems, handleSelect: onMenuSelect } = useTrackMenu(toRef(medi
       </TrackInfo>
       <PlayerControls class="mx-15" />
       <div class="flex items-center justify-end gap-2 min-w-0">
-        <PlayerTimeInfo />
+        <PlayerTimeInfo v-if="!isBilibili" />
         <Toolbar />
       </div>
     </div>
   </div>
-  <PlaylistPickerDialog v-model:open="pickerOpen" :mode="pickerMode" :tracks="pickerTracks" />
+  <SAsyncDialog
+    v-model:open="pickerOpen"
+    :loader="loadPlaylistPickerDialog"
+    :mode="pickerMode"
+    :tracks="pickerTracks"
+  />
 </template>

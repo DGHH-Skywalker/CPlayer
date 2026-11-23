@@ -1,5 +1,5 @@
 import { BrowserWindow, screen } from "electron";
-import { join } from "path";
+import { appFile } from "@main/utils/appFiles";
 import { is } from "@electron-toolkit/utils";
 import { createWindow } from "./create";
 import { setTrayDesktopLyric } from "@main/services/tray";
@@ -239,7 +239,9 @@ export const createDesktopLyricWindow = (): BrowserWindow => {
       `${process.env["ELECTRON_RENDERER_URL"]}/windows/desktop-lyric/index.html`,
     );
   } else {
-    desktopLyricWindow.loadFile(join(__dirname, "../renderer/windows/desktop-lyric/index.html"));
+    desktopLyricWindow.loadFile(
+      appFile("out", "renderer", "windows", "desktop-lyric", "index.html"),
+    );
   }
 
   desktopLyricWindow.webContents.on("did-finish-load", () => {

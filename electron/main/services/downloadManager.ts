@@ -5,6 +5,7 @@
  * 缺少 URL 时经 download:resolve 向渲染层即时索取
  */
 
+import { StartupFileMaintenance } from "@main/core/startupFiles";
 import fs from "node:fs";
 import fsp, { type FileHandle } from "node:fs/promises";
 import path from "node:path";
@@ -72,6 +73,9 @@ interface Pending {
 
 /** 全部未结束任务（排队中 + 进行中），按 taskId */
 const tasks = new Map<string, Pending>();
+const startupMaintenance = new StartupFileMaintenance((name) =>
+  tasks.has(name.replace(/\.part$/, "")),
+);
 /** 等待下载的 taskId，FIFO */
 const queue: string[] = [];
 /** 当前正在下载的 taskId；null 表示空闲 */
@@ -261,6 +265,9 @@ const runTask = async (
   const partPath = path.join(tmpDir(), `${req.taskId}.part`);
 
   try {
+    const cleanup = startupMaintenance.pending(`${req.taskId}.part`);
+    if (cleanup) await cleanup;
+    if (controller.signal.aborted) return;
     // 轮到才向渲染层即时解析
     if (!req.url) {
       const payload: DownloadResolvePayload = {
@@ -531,15 +538,26 @@ export const lookupDownloadedFile = async (
   return null;
 };
 
-/** 启动初始化 */
-export const init = async (): Promise<void> => {
+/** 核心启动只结算旧任务和注册退出中止，不扫描临时目录 */
+export const init = (): void => {
   db.markInterrupted();
-  const dir = tmpDir();
-  try {
-    const entries = await fsp.readdir(dir);
-    await Promise.all(entries.map((name) => fsp.unlink(path.join(dir, name)).catch(() => {})));
-  } catch {}
   app.on("before-quit", () => {
+    startupMaintenance.stop();
     for (const pending of tasks.values()) pending.controller.abort();
   });
+};
+
+/** 首屏就绪后逐项清理临时文件，不能删除本次运行的新任务 */
+export const cleanupStartupFiles = async (): Promise<void> => {
+  const dir = tmpDir();
+  let entries: string[];
+  try {
+    entries = await fsp.readdir(dir);
+  } catch {
+    return;
+  }
+  for (const name of entries) {
+    if (startupMaintenance.disposed) return;
+    await startupMaintenance.run(name, () => fsp.unlink(path.join(dir, name)).catch(() => {}));
+  }
 };

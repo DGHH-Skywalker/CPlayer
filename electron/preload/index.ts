@@ -78,8 +78,12 @@ const api = {
     song: () => ipcRenderer.invoke("bilibili:current-song"),
     playSong: (track: import("@shared/types/player").Track, token: string, autoPlay: boolean) =>
       ipcRenderer.invoke("bilibili:play-song", track, token, autoPlay),
-    controlSong: (command: "play" | "pause" | "stop" | "seek", token: string, position?: number) =>
-      ipcRenderer.invoke("bilibili:control-song", command, token, position),
+    controlSong: (
+      command: "play" | "pause" | "stop" | "seek" | "inspect",
+      token: string,
+      position?: number,
+      seekId?: string,
+    ) => ipcRenderer.invoke("bilibili:control-song", command, token, position, seekId),
     onSong: (callback: (event: import("@shared/types/bilibili").BilibiliSongEvent) => void) => {
       ipcRenderer.removeAllListeners("bilibili:song");
       return subscribe("bilibili:song", callback);
@@ -90,7 +94,7 @@ const api = {
       ipcRenderer.removeAllListeners("bilibili:state");
       return subscribe("bilibili:state", callback);
     },
-  },
+  } satisfies import("@shared/types/bilibili").BilibiliApi,
   school: {
     get: () => ipcRenderer.invoke("school:get"),
     configure: (config: import("@shared/types/school").SchoolConfig) =>
@@ -502,6 +506,15 @@ const api = {
       subscribe<TaskbarLyricSettings>("taskbarLyric:configChange", callback),
   },
   plugins: {
+    onNavigate: (callback) => {
+      ipcRenderer.removeAllListeners("plugin:navigate");
+      return subscribe("plugin:navigate", callback);
+    },
+    effectsState: () => ipcRenderer.invoke("plugin:effects-state"),
+    centerState: () => ipcRenderer.invoke("plugin:center-state"),
+    centerEnter: () => ipcRenderer.invoke("plugin:center-enter"),
+    centerReset: () => ipcRenderer.invoke("plugin:center-reset"),
+    restoreBuiltin: () => ipcRenderer.invoke("plugin:restore-builtin"),
     /**
      * 保存用户对插件权限的选择
      * @param id - 插件标识

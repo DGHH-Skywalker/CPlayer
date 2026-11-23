@@ -3,6 +3,7 @@
  * 用于主进程、预加载、渲染进程、沙箱子进程之间的契约
  */
 
+import type { DynamicsEffect } from "./audioEffects";
 import type { LyricLine } from "lyric-kit";
 
 import type { Track, PlayerState, RepeatMode, ShuffleMode } from "./player";
@@ -34,7 +35,17 @@ export type PluginAction =
 export type PluginQuality = "hi-res" | "lossless" | "hq" | "sq" | "lq";
 
 /** 插件可声明的权限清单 */
-export const PLUGIN_GRANTS = ["network", "control", "ui", "library", "api"] as const;
+export const PLUGIN_GRANTS = [
+  "network",
+  "control",
+  "ui",
+  "library",
+  "api",
+  "settings",
+  "browser",
+  "dsp",
+  "files",
+] as const;
 export type PluginPermissions = Partial<Record<PluginGrant, boolean>>;
 /** 插件权限：network 联网 / control 控制播放器 / ui 扩展界面 */
 export type PluginGrant = (typeof PLUGIN_GRANTS)[number];
@@ -55,7 +66,7 @@ export interface PlaybackEventData {
 }
 
 /** 插件注册的配置项类型（安全子集） */
-export type PluginSettingType = "switch" | "number" | "text" | "select";
+export type PluginSettingType = "switch" | "number" | "text" | "select" | "slider";
 
 /** 插件注册的单个配置项 */
 export interface PluginSettingItem {
@@ -64,6 +75,7 @@ export interface PluginSettingItem {
   /** 纯字符串展示名，不做多语言 */
   label: string;
   description?: string;
+  when?: { key: string; value: string };
   default: boolean | number | string;
   /** number 专用 */
   min?: number;
@@ -409,6 +421,20 @@ export interface HostApi {
   };
 
   api: Pick<ApisApi, "call">;
+  ui: { openSettings(category?: string): Promise<void>; navigate(path: string): Promise<void> };
+  /** 实时音效参数经过宿主校验，不传递音频采样 */
+  audio: { registerEffect(config: DynamicsEffect): Promise<void>; removeEffect(): Promise<void> };
+  settings: {
+    get(path: string): Promise<unknown>;
+    set(path: string, value: unknown): Promise<void>;
+  };
+  browser: { command(command: string, value?: unknown): Promise<unknown> };
+  assets: { read(name: string): Promise<Uint8Array> };
+  files: {
+    pick(mode: "read" | "write"): Promise<string | null>;
+    read(token: string): Promise<Uint8Array>;
+    write(token: string, value: Uint8Array): Promise<void>;
+  };
   /** 主动系统通知，需 ui 权限 */
   notify(message: string): Promise<void>;
 
@@ -491,6 +517,17 @@ export type SandboxOut =
 
 /** worker 调用回宿主的方法名 */
 export type HostCallMethod =
+  | "ui.openSettings"
+  | "ui.navigate"
+  | "audio.registerEffect"
+  | "audio.removeEffect"
+  | "settings.get"
+  | "settings.set"
+  | "browser.command"
+  | "assets.read"
+  | "files.pick"
+  | "files.read"
+  | "files.write"
   | "request"
   | "storage.get"
   | "storage.set"
@@ -591,6 +628,13 @@ export interface MarketPlugin {
 
 /** 渲染端插件 API */
 export interface PluginsApi {
+  onNavigate(callback: (path: string) => void): () => void;
+  effectsState(): Promise<import("./audioEffects").AudioEffectsState>;
+  centerState(): Promise<boolean>;
+  centerEnter(): Promise<boolean>;
+  centerReset(): Promise<void>;
+  restoreBuiltin(): Promise<void>;
+
   /** 修改单个声明权限，即时生效 */
   setPermission: (id: string, grant: PluginGrant, enabled: boolean) => Promise<void>;
   /** 列出所有已安装插件 */

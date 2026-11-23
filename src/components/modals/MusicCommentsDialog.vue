@@ -136,6 +136,7 @@ watch(
     await loadSources();
     await refresh();
   },
+  { immediate: true },
 );
 
 watch(sourceId, (next, prev) => {

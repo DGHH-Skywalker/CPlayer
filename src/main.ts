@@ -1,4 +1,3 @@
-import { schoolState } from "./stores/school";
 import "virtual:uno.css";
 import "@/styles/global.css";
 
@@ -9,10 +8,8 @@ import i18n from "./i18n";
 
 import { useThemeStore } from "./stores/theme";
 import { useSettingsStore } from "./stores/settings";
-import { useHotkeyStore } from "./stores/hotkey";
 import { initPlayer, playFiles, restoreLastTrack } from "./core/player";
 import { handleOrpheus } from "./services/orpheus";
-import { installHotkeyManager } from "./core/hotkey/manager";
 import { vRipple } from "./directives/ripple";
 
 const pinia = createPinia();
@@ -38,35 +35,51 @@ watch(
 );
 
 /**
- * 启动播放服务并分发冷启动任务
+ * 消费本地冷启动任务并派发播放，不等待音源、协议请求或歌词网络
  */
 const bootstrapPlayback = async (): Promise<void> => {
-  const pendingAudioFiles = await window.api.system.consumePendingAudioFiles();
-  const pendingOrpheusUrl = await window.api.system.consumePendingProtocolUrl();
+  const [pendingAudioFiles, pendingOrpheusUrl] = await Promise.all([
+    window.api.system.consumePendingAudioFiles(),
+    window.api.system.consumePendingProtocolUrl(),
+  ]);
 
   if (pendingAudioFiles && pendingAudioFiles.length > 0) {
-    await playFiles(pendingAudioFiles);
+    void playFiles(pendingAudioFiles).catch(console.error);
   } else if (pendingOrpheusUrl) {
-    await handleOrpheus(pendingOrpheusUrl);
+    void handleOrpheus(pendingOrpheusUrl).catch(console.error);
   } else {
-    await restoreLastTrack();
+    void restoreLastTrack().catch(console.error);
   }
 };
 
 /** 挂载首屏并准备播放操作 */
 export const mountApplication = async (): Promise<void> => {
-  await router.isReady();
-  if (window.api.school) schoolState.value = await window.api.school.get();
+  // 路由下载与播放核心并行，首页挂载后的推荐、歌单不抢占播放准备
+  await Promise.all([router.isReady(), initPlayer()]);
+  // 只等待本地任务取出并派发，主页挂载后才会启动推荐和歌单请求
+  await startPlayback();
   app.mount("#app");
   await nextTick();
-  await initPlayer();
+  performance.mark("carbonv:app-mounted");
 };
 
-/** 启动层退出后恢复播放和快捷键 */
+let playbackDispatch: Promise<void> | undefined;
+/**
+ * 核心就绪后优先派发恢复任务，同一启动只派发一次
+ * @returns 本地任务已消费并派发，不代表音频或网络加载完成
+ */
+export const startPlayback = (): Promise<void> => {
+  playbackDispatch ??= bootstrapPlayback().catch(console.error);
+  return playbackDispatch;
+};
+
+/** 启动层退出后再加载快捷键，不参与首个音频与歌词的关键路径 */
 export const startApplication = (): void => {
-  void bootstrapPlayback().catch(console.error);
-  useHotkeyStore()
-    .init()
-    .then(installHotkeyManager)
+  void startPlayback();
+  void Promise.all([import("./stores/hotkey"), import("./core/hotkey/manager")])
+    .then(async ([{ useHotkeyStore }, { installHotkeyManager }]) => {
+      await useHotkeyStore().init();
+      installHotkeyManager();
+    })
     .catch((err) => console.error("[hotkey] init failed", err));
 };

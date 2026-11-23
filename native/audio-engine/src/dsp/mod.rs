@@ -7,3 +7,5 @@ pub(crate) mod limiter;
 pub(crate) mod loudness;
 pub(crate) mod tempo;
 pub(crate) mod transition_mix;
+
+pub(crate) mod dynamics;

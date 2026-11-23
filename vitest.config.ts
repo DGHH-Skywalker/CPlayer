@@ -24,6 +24,19 @@ export default defineConfig({
     },
   },
   plugins: [
+    {
+      name: "test-virtual-styles",
+      /** 测试启动入口时解析虚拟样式，不运行整套 UnoCSS 生成流程 */
+      resolveId(id) {
+        if (id === "virtual:uno.css") return "\0test-uno-css";
+        return null;
+      },
+      /** 样式不参与启动顺序测试，提供空模块即可 */
+      load(id) {
+        if (id === "\0test-uno-css") return "";
+        return null;
+      },
+    },
     vue(),
     Icons({ compiler: "vue3" }),
     AutoImport({

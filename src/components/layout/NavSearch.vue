@@ -220,6 +220,9 @@ watch(dialogOpen, (open) => {
     activeIndex.value = -1;
   }
 });
+
+/** 首次打开才解析RecognitionDialog，加载时保留操作反馈 */
+const loadRecognitionDialog = () => import("@/components/modals/RecognitionDialog.vue");
 </script>
 
 <template>
@@ -250,7 +253,7 @@ watch(dialogOpen, (open) => {
     </SButton>
   </div>
   <!-- 听歌识曲 -->
-  <RecognitionDialog v-model:open="recognitionOpen" />
+  <SAsyncDialog v-model:open="recognitionOpen" :loader="loadRecognitionDialog" />
   <!-- 搜索 -->
   <SDialog
     v-model:open="dialogOpen"

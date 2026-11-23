@@ -50,3 +50,21 @@ pub fn init_logger(log_dir: String, is_dev: bool) {
         info!(log_dir, is_dev, "audio-engine 日志系统已初始化");
     });
 }
+
+/// 配置最后一级输出动态处理；校验失败时保留当前有效配置
+#[napi]
+pub fn configure_dynamics(
+    enabled: bool,
+    dynamic: bool,
+    strength: f64,
+    ceiling_db: f64,
+) -> napi::Result<()> {
+    crate::dsp::dynamics::configure(enabled, dynamic, strength as f32, ceiling_db as f32)
+        .map_err(napi::Error::from_reason)
+}
+
+/// 读取输出保护最近的最大频段衰减，不传回音频样本
+#[napi]
+pub fn read_dynamics_reduction() -> f64 {
+    crate::dsp::dynamics::reduction()
+}

@@ -1,3 +1,4 @@
+import { StartupFileMaintenance } from "@main/core/startupFiles";
 import fs from "node:fs";
 import { parseStreamingSource } from "@shared/utils/streamingSource";
 import { resolveStreamingMediaSource } from "@main/services/streaming/mediaSource";
@@ -77,6 +78,13 @@ const inFlight = new Map<string, InFlight>();
 const waiting: Array<() => void> = [];
 let activeDownloads = 0;
 let preloadPin: { id: string; filename: string } | null = null;
+const startupMaintenance = new StartupFileMaintenance((name) => {
+  const filename = name.replace(/\.part$/, "");
+  return (
+    preloadPin?.filename === filename ||
+    [...inFlight.keys()].some((key) => filenameFor(key) === filename)
+  );
+});
 
 /** sizeLimit 字节数；0/负数视为不限制 */
 const sizeLimitBytes = (): number => {
@@ -157,52 +165,43 @@ export const cancelPreload = (id: string): void => {
   }
 };
 
-/**
- * 启动时孤儿清理
- * 删 .part；删表里有文件不在的；删目录里有表里没的
- */
-const cleanupOrphans = async (): Promise<void> => {
+/** 后台清理启动遗留文件，活动下载通过单文件屏障保护 */
+export const cleanupStartupFiles = async (): Promise<void> => {
+  const directory = cacheDir;
   let entries: string[];
   try {
-    entries = await fsp.readdir(cacheDir);
+    entries = await fsp.readdir(directory);
   } catch {
     return;
   }
-
-  let partRemoved = 0;
-  let orphanFiles = 0;
-  for (const name of entries) {
-    if (name.endsWith(".part")) {
-      try {
-        await fsp.unlink(path.join(cacheDir, name));
-        partRemoved += 1;
-      } catch {}
-    }
-  }
-
+  if (startupMaintenance.disposed || directory !== cacheDir) return;
   const known = new Set(listAllFilenames());
+  let removed = 0;
   for (const name of entries) {
-    if (name.endsWith(".part")) continue;
-    if (!known.has(name)) {
+    if (startupMaintenance.disposed || directory !== cacheDir) return;
+    if (!name.endsWith(".part") && known.has(name)) continue;
+    await startupMaintenance.run(name, async () => {
+      // 清理快照与数据库读取之间可能完成了下载，删除前再次确认归属
+      if (!name.endsWith(".part") && findByFilename(name)) return;
       try {
-        await fsp.unlink(path.join(cacheDir, name));
-        orphanFiles += 1;
+        await fsp.unlink(path.join(directory, name));
+        removed++;
       } catch {}
-    }
+    });
   }
-
-  let missingRows = 0;
   for (const filename of known) {
-    if (!fs.existsSync(path.join(cacheDir, filename))) {
-      const row = findByFilename(filename);
-      if (row) deleteByKey(row.cacheKey);
-      missingRows += 1;
-    }
+    if (startupMaintenance.disposed || directory !== cacheDir) return;
+    await startupMaintenance.run(filename, async () => {
+      try {
+        await fsp.access(path.join(directory, filename));
+      } catch {
+        if (startupMaintenance.disposed) return;
+        const row = findByFilename(filename);
+        if (row) deleteByKey(row.cacheKey);
+      }
+    });
   }
-
-  songCacheLog.info(
-    `[init] dir=${cacheDir} orphans.part=${partRemoved} orphan-files=${orphanFiles} missing-rows=${missingRows}`,
-  );
+  songCacheLog.info(`[maintenance] dir=${directory} removed=${removed}`);
 };
 
 /**
@@ -258,6 +257,10 @@ const runDownload = async (
   const partPath = `${finalPath}.part`;
 
   try {
+    const cleanup =
+      startupMaintenance.pending(filename) ?? startupMaintenance.pending(`${filename}.part`);
+    if (cleanup) await cleanup;
+    if (controller.signal.aborted) return null;
     await fsp.mkdir(cacheDir, { recursive: true });
     if (source === "streaming") {
       const identity = parseStreamingSource(streamUrl);
@@ -338,12 +341,11 @@ const runDownload = async (
   }
 };
 
-/** 启动初始化：建目录 + 孤儿清理 */
-export const init = async (): Promise<void> => {
+/** 启动只准备目录引用与退出钩子，不扫描缓存目录 */
+export const init = (): void => {
   cacheDir = getSongCacheDir();
-  await fsp.mkdir(cacheDir, { recursive: true });
-  await cleanupOrphans();
   app.on("before-quit", () => {
+    startupMaintenance.stop();
     for (const entry of inFlight.values()) entry.controller.abort();
   });
 };

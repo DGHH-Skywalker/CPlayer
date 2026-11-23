@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { EventEmitter } from "node:events";
+import { join } from "node:path";
 import { flushPromises } from "@vue/test-utils";
 
 const mocks = vi.hoisted(() => ({
@@ -9,7 +10,10 @@ const mocks = vi.hoisted(() => ({
   createWindow: vi.fn(),
 }));
 
-vi.mock("electron", () => ({ shell: { openExternal: vi.fn() } }));
+vi.mock("electron", () => ({
+  app: { getAppPath: () => "/fixture/resources/app.asar" },
+  shell: { openExternal: vi.fn() },
+}));
 vi.mock("@electron-toolkit/utils", () => ({ is: { dev: false } }));
 vi.mock("./create", () => ({ createWindow: mocks.createWindow }));
 vi.mock("@main/utils/logger", () => ({ coreLog: { error: vi.fn() } }));
@@ -60,7 +64,10 @@ describe("主窗口启动交接", () => {
     mocks.settings["system.uiZoom"] = 125;
     const service = await import("./main");
     service.createMainWindow();
-    expect(mocks.main.loadFile).toHaveBeenCalledWith(expect.any(String), { hash: "/" });
+    expect(mocks.main.loadFile).toHaveBeenCalledWith(
+      join("/fixture/resources/app.asar", "out", "renderer", "index.html"),
+      { hash: "/" },
+    );
     expect(mocks.createWindow).toHaveBeenCalledWith(
       expect.objectContaining({ webPreferences: expect.objectContaining({ zoomFactor: 1.25 }) }),
     );

@@ -1,5 +1,5 @@
 import { BrowserWindow, screen } from "electron";
-import { join } from "path";
+import { appFile } from "@main/utils/appFiles";
 import { is } from "@electron-toolkit/utils";
 import { createWindow } from "./create";
 import { loadNativeModule } from "@main/utils/nativeLoader";
@@ -316,7 +316,9 @@ export const createTaskbarLyricWindow = (): BrowserWindow | null => {
       `${process.env["ELECTRON_RENDERER_URL"]}/windows/taskbar-lyric/index.html`,
     );
   } else {
-    taskbarLyricWindow.loadFile(join(__dirname, "../renderer/windows/taskbar-lyric/index.html"));
+    taskbarLyricWindow.loadFile(
+      appFile("out", "renderer", "windows", "taskbar-lyric", "index.html"),
+    );
   }
 
   taskbarLyricWindow.once("ready-to-show", () => {

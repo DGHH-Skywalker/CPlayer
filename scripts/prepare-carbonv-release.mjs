@@ -59,6 +59,16 @@ export const assembleRelease = (input, output, cwd = process.cwd()) => {
     "Core checksum differs",
   );
   assert.equal(acceptance.packagedCore, core.version, "Packaged Core version differs");
+  const dynamics = JSON.parse(readFileSync(join(cwd, "vendor/noiselimiter/manifest.json"), "utf8"));
+  assert.equal(
+    sha256(join(cwd, "vendor/noiselimiter/dynamics.wasm")),
+    dynamics.wasmSha256,
+    "Dynamics checksum differs",
+  );
+  assert.equal(acceptance.startupLazyLoading, true, "Lazy startup was not verified");
+  assert.equal(acceptance.pluginCenter, true, "Plugin center was not verified");
+  assert.equal(acceptance.noiseLimiter, true, "NoiseLimiter was not verified");
+  const pluginZip = unique(`NoiseLimiter-${dynamics.version}.cplayer.zip`);
   const names = ["setup", "portable"].map((kind) => `Cplayer-${pkg.version}-x64-${kind}.exe`);
   const binaries = names.map((name) => unique(name));
   for (const path of binaries)
@@ -66,6 +76,7 @@ export const assembleRelease = (input, output, cwd = process.cwd()) => {
   const destination = resolve(output);
   mkdirSync(destination);
   for (const path of binaries) copyFileSync(path, join(destination, basename(path)));
+  copyFileSync(pluginZip, join(destination, basename(pluginZip)));
   copyFileSync(acceptancePath, join(destination, "acceptance-result.json"));
   execFileSync(
     "git",
@@ -92,13 +103,24 @@ export const assembleRelease = (input, output, cwd = process.cwd()) => {
       "vendor/bilikit/LICENSE",
       "vendor/bilikit/BRAND-ASSETS.md",
       "vendor/bilikit/manifest.json",
+      "vendor/noiselimiter/UPSTREAM.json",
+      "vendor/noiselimiter/camilladsp/LICENSE_MPL2.0.txt",
+      "vendor/noiselimiter/camilladsp/LICENSE_GLPv3.txt",
     ],
     { cwd },
   );
   writeFileSync(
     join(destination, "release-provenance.json"),
     JSON.stringify(
-      { application: "CarbonVPlayer", version: pkg.version, commit, build, core, acceptance },
+      {
+        application: "CarbonVPlayer",
+        version: pkg.version,
+        commit,
+        build,
+        core,
+        dynamics,
+        acceptance,
+      },
       null,
       2,
     ) + "\n",

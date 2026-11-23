@@ -1,3 +1,4 @@
+import { bindNativeDynamics, assertNativeDynamics } from "./audioEffects";
 import { markPlaybackActivity } from "./playbackActivity";
 import { biliSongTransport } from "./bilibiliSongTransport";
 import { assertSchoolPlayback } from "./schoolPlaybackGate";
@@ -34,6 +35,27 @@ export const getEngine = (): AudioEngineModule => {
       throw new Error("Failed to load audio-engine.node");
     }
     audioEngine.initLogger(nativeLogsDir, isDev);
+    bindNativeDynamics(
+      (enabled, config) => {
+        const configure = Reflect.get(audioEngine!, "configureDynamics");
+        if (typeof configure !== "function") {
+          playerInstance?.pauseImmediately();
+          throw new Error("原生音效模块版本不匹配");
+        }
+        Reflect.apply(configure, audioEngine, [
+          enabled,
+          config.mode === "dynamic",
+          config.strength,
+          config.ceilingDb,
+        ]);
+      },
+      () => {
+        const meter = Reflect.get(audioEngine!, "readDynamicsReduction");
+        return playerInstance?.getStatus().state === "playing" && typeof meter === "function"
+          ? Reflect.apply(meter, audioEngine, [])
+          : 0;
+      },
+    );
     syncEngineProxy();
   }
   return audioEngine;
@@ -75,6 +97,7 @@ export const getPlayer = (): PlayerInstance => {
           if (starts.has(String(key))) {
             try {
               assertSchoolPlayback();
+              assertNativeDynamics();
               if (biliSongTransport.current) throw new Error("哔哩Song 正在播放，请先切换队列项");
             } catch (error) {
               return Promise.reject(error);

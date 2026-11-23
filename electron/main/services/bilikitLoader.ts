@@ -1,3 +1,5 @@
+import { noiseLimiterBootstrap } from "./noiseLimiterPage";
+import { effectiveDynamics, reportBrowserEffect } from "./audioEffects";
 import { app, type WebContents } from "electron";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -66,6 +68,8 @@ export class BilikitLoader {
   private mediaContexts = new Map<string, boolean>();
   private sessions = new Set<string>();
   private source = "";
+  private baseSource = "";
+  private songSource = "";
   private registration: Promise<void> = Promise.resolve();
   private contents: WebContents;
   version = "unavailable";
@@ -109,7 +113,9 @@ export class BilikitLoader {
         this.version = core.manifest.version;
         this.source = coreBootstrap(core.source, true, noLogin) + MEDIA_BOOTSTRAP;
       } else this.source = coreBootstrap("", false, false) + MEDIA_BOOTSTRAP;
-      this.source += biliSongBootstrap(song);
+      this.baseSource = this.source;
+      this.songSource = biliSongBootstrap(song);
+      this.source += noiseLimiterBootstrap() + this.songSource;
       if (!wc.debugger.isAttached()) {
         wc.debugger.attach("1.3");
         wc.debugger.on("message", async (_event, method, params, sessionId) => {
@@ -136,6 +142,7 @@ export class BilikitLoader {
               isBilibiliUrl(wc.getURL())
             ) {
               const value = JSON.parse(params.payload);
+              if (value.audioEffect) reportBrowserEffect(value.audioEffect);
               if (value.song && !sessionId) this.reportSong(value.song);
               if (value.coreReady === true) this.loaded = true;
               if (typeof value.playing === "boolean") {
@@ -170,6 +177,28 @@ export class BilikitLoader {
       this.loaded = false;
       coreLog.error("B 站提前注入失败，保留原生网页", error);
     }
+  }
+
+  /** 参数变化只更新音频节点及后续文档脚本，不重载当前视频 */
+  updateAudioEffects(): Promise<void> {
+    const task = this.registration.then(async () => {
+      if (this.contents.isDestroyed()) return;
+      const source = noiseLimiterBootstrap();
+      this.source = this.baseSource + source + this.songSource;
+      for (const session of ["", ...this.sessions]) await this.register(session);
+      await Promise.allSettled(
+        this.contents.mainFrame.framesInSubtree.map((frame) =>
+          frame
+            .executeJavaScript(
+              `window.__carbonvDynamics ? (window.__carbonvDynamics.update(${JSON.stringify(effectiveDynamics())}),true) : false`,
+              true,
+            )
+            .then((ready) => (ready ? undefined : frame.executeJavaScript(source, true))),
+        ),
+      );
+    });
+    this.registration = task.catch((error) => coreLog.warn("网页音效更新失败", error));
+    return task;
   }
 
   /**

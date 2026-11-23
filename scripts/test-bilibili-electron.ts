@@ -1,3 +1,5 @@
+import { registerDynamics, removeDynamics } from "../electron/main/services/audioEffects";
+import { DEFAULT_DYNAMICS } from "../shared/types/audioEffects";
 import assert from "node:assert/strict";
 import { app, BrowserWindow, WebContentsView, session } from "electron";
 import { BilikitLoader } from "../electron/main/services/bilikitLoader";
@@ -42,7 +44,24 @@ const run = async (): Promise<void> => {
       wav.writeUInt16LE(16, 34);
       wav.write("data", 36);
       wav.writeUInt32LE(frames * 2, 40);
-      return new Response(wav, { headers: { "content-type": "audio/wav" } });
+      if (url.pathname === "/focus.wav")
+        for (let i = 0; i < frames; i++)
+          wav.writeInt16LE(
+            Math.round(Math.sin((i * 2 * Math.PI * 1000) / 8000) * 28000),
+            44 + i * 2,
+          );
+      const range = request.headers.get("range")?.match(/^bytes=(\d+)-(\d*)$/);
+      const start = range ? Number(range[1]) : 0;
+      const end = range?.[2] ? Math.min(wav.length - 1, Number(range[2])) : wav.length - 1;
+      return new Response(wav.subarray(start, end + 1), {
+        status: range ? 206 : 200,
+        headers: {
+          "content-type": "audio/wav",
+          "accept-ranges": "bytes",
+          "content-length": String(end - start + 1),
+          ...(range ? { "content-range": `bytes ${start}-${end}/${wav.length}` } : {}),
+        },
+      });
     }
     if (url.pathname === "/focus")
       return new Response(
@@ -51,7 +70,7 @@ const run = async (): Promise<void> => {
       );
     if (url.pathname.startsWith("/video/"))
       return new Response(
-        `<!doctype html><video id="mv" src="/tone.wav" muted loop></video><script>
+        `<!doctype html><video id="mv" src="${url.searchParams.get("test") === "seek" ? "/focus.wav" : "/tone.wav"}" muted loop></video><script>
           window.siteNext = 0; window.siteAttempts = 0;
           const video = document.querySelector('video');
           video.loop = true; video.setAttribute('loop', '');
@@ -59,7 +78,7 @@ const run = async (): Promise<void> => {
           video.addEventListener('timeupdate', () => {
             video.loop = true;
             const mode = new URLSearchParams(location.search).get('test');
-            if (mode && !window.siteAttempts && video.currentTime > (mode === 'early-rebuild' ? .3 : .85)) {
+            if (mode && mode !== 'seek' && !window.siteAttempts && video.currentTime > (mode === 'early-rebuild' ? .3 : .85)) {
               window.siteAttempts++;
               video.remove();
               const next = document.createElement('video'); next.muted = true; next.src = '/tone.wav?next'; document.body.append(next);
@@ -108,14 +127,20 @@ const run = async (): Promise<void> => {
   }
   window.webContents.setZoomFactor(1);
   await wc.loadURL("about:blank");
-  const songEvents: Array<{ state: string }> = [];
+  const songEvents: Array<{
+    state: string;
+    seekId?: string;
+    seekPhase?: string;
+    position?: number;
+    paused?: boolean;
+  }> = [];
   const loader = new BilikitLoader(
     wc,
     () => {},
     (event) => {
       songEvents.push(event as { state: string });
-      const value = event as { state: string; token: string };
-      if (value.state === "loading")
+      const value = event as { state: string; token: string; reason?: string };
+      if (value.state === "loading" && value.reason === "metadata")
         void wc
           .executeJavaScript(
             `window.__carbonvSongControl('play', 0, ${JSON.stringify(value.token)})`,
@@ -220,6 +245,50 @@ const run = async (): Promise<void> => {
     );
     console.log(`哔哩Song 循环、window 捕获与播放器重建验证通过: ${mode || "natural"}`);
   }
+  const seekingSong = {
+    ...song,
+    token: "fixture-seek",
+    autoPlay: false,
+    url: song.url + "?test=seek",
+  };
+  await loader.install(false, false, seekingSong);
+  await wc.loadURL(seekingSong.url);
+  for (let i = 0; i < 100; i++) {
+    if (await wc.executeJavaScript("document.querySelector('video').readyState>=1")) break;
+    await new Promise((done) => setTimeout(done, 20));
+  }
+  await wc.executeJavaScript("window.__carbonvSongControl('pause',0,'fixture-seek')");
+  await wc.executeJavaScript(
+    "window.__carbonvSongControl('seek',3000,'fixture-seek','paused-seek')",
+  );
+  for (
+    let i = 0;
+    i < 100 && !songEvents.some((e) => e.seekId === "paused-seek" && e.seekPhase === "seeked");
+    i++
+  )
+    await new Promise((done) => setTimeout(done, 20));
+  assert.ok(songEvents.some((e) => e.seekId === "paused-seek" && e.seekPhase === "seeked"));
+  const pausedSeek = await wc.executeJavaScript(
+    "({paused:document.querySelector('video').paused,time:document.querySelector('video').currentTime})",
+  );
+  assert.equal(pausedSeek.paused, true);
+  assert.ok(Math.abs(pausedSeek.time - 3) < 0.05);
+  await wc.executeJavaScript(
+    "window.__carbonvSongControl('seek',2000,'fixture-seek','older');window.__carbonvSongControl('seek',6000,'fixture-seek','latest')",
+  );
+  for (
+    let i = 0;
+    i < 100 && !songEvents.some((e) => e.seekId === "latest" && e.seekPhase === "seeked");
+    i++
+  )
+    await new Promise((done) => setTimeout(done, 20));
+  assert.ok(songEvents.some((e) => e.seekId === "latest" && e.seekPhase === "seeked"));
+  assert.ok(
+    Math.abs((await wc.executeJavaScript("document.querySelector('video').currentTime")) - 6) <
+      0.05,
+  );
+  assert.equal(await wc.executeJavaScript("document.querySelector('video').paused"), true);
+  console.log("真实 Chromium 暂停定位与连续定位最新操作生效验证通过");
   // 原生本地按钮在远程视图之上，不向网页提供任何特权 API
   let requested = 0;
   const button = new BilibiliSongButton(window, () => {
@@ -288,6 +357,45 @@ const run = async (): Promise<void> => {
   assert.equal(await wc.executeJavaScript("window.noLoginAtFirstScript"), true);
   await wc.executeJavaScript("history.pushState({}, '', '/spa');");
   assert.equal(await wc.executeJavaScript("!!window.coreAtFirstScript"), true);
+  window.show();
+  wc.setAudioMuted(true);
+  registerDynamics("fixture", DEFAULT_DYNAMICS);
+  await loader.install(false, false);
+  await wc.loadURL("https://www.bilibili.com/focus");
+  await wc.executeJavaScript(
+    "document.querySelector('video').muted=false;document.querySelector('video').play()",
+    true,
+  );
+  for (let i = 0; i < 100; i++) {
+    const status = await wc.executeJavaScript("window.__carbonvDynamics.status()");
+    if (status.reports.some((r) => r?.state === "active" && r.peak > 0)) break;
+    await new Promise((done) => setTimeout(done, 50));
+  }
+  const dynamics = await wc.executeJavaScript("window.__carbonvDynamics.status()");
+  assert.equal(dynamics.context, "running");
+  assert.ok(
+    dynamics.reports.some(
+      (r) => r?.state === "active" && r.peak > 0.01 && r.peak <= 10 ** (-12 / 20) + 1e-5,
+    ),
+    JSON.stringify(dynamics),
+  );
+  const urlBefore = wc.getURL();
+  registerDynamics("fixture", { ...DEFAULT_DYNAMICS, ceilingDb: -18 });
+  await loader.updateAudioEffects();
+  await new Promise((done) => setTimeout(done, 600));
+  const stricter = await wc.executeJavaScript("window.__carbonvDynamics.status()");
+  assert.ok(
+    stricter.reports.some(
+      (r) => r?.state === "active" && r.peak > 0 && r.peak <= 10 ** (-18 / 20) + 1e-5,
+    ),
+    JSON.stringify(stricter),
+  );
+  assert.equal(wc.getURL(), urlBefore);
+  removeDynamics("fixture");
+  await loader.updateAudioEffects();
+  assert.equal(await wc.executeJavaScript("window.__carbonvDynamics.status().enabled"), false);
+  assert.equal(await wc.executeJavaScript("document.querySelector('video').paused"), false);
+  console.log("真实 AudioWorklet/WASM 输出峰值及无重载参数更新验证通过", dynamics, stricter);
   await loader.install(false, false);
   await wc.loadURL("about:blank");
   console.log("关闭旧文档后清理测试存储");

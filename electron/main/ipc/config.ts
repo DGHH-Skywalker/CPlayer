@@ -46,7 +46,7 @@ import { refreshPowerBlocker } from "@main/utils/powerBlocker";
  * @param keyPath - 配置路径
  * @param value - 新值
  */
-const applyConfigChange = (keyPath: string, value: unknown): void => {
+export const applyConfigChange = (keyPath: string, value: unknown): void => {
   switch (keyPath) {
     case "player.keepScreenAwake":
       refreshPowerBlocker();

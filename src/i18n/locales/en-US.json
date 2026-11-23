@@ -777,7 +777,7 @@
       "mediaSource": "Media Sources",
       "download": "Downloads",
       "localCache": "Local & Cache",
-      "plugins": "Plugin Manager",
+      "plugins": "Plugin Center",
       "other": "Other",
       "about": "About",
       "school": "School requests"
@@ -2185,6 +2185,22 @@
         "api": {
           "label": "Platform APIs",
           "desc": "Call music platform APIs using the current session"
+        },
+        "settings": {
+          "label": "Application settings",
+          "desc": ""
+        },
+        "browser": {
+          "label": "Bilibili browser",
+          "desc": ""
+        },
+        "dsp": {
+          "label": "Audio effects",
+          "desc": ""
+        },
+        "files": {
+          "label": "Selected files",
+          "desc": ""
         }
       }
     },

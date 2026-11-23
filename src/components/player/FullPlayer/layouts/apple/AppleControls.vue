@@ -76,6 +76,8 @@ const { items: menuItems, handleSelect: onMenuSelect } = useTrackMenu(toRef(medi
   onAddToPlaylist: (track) => openPicker([track]),
   onDownload: (track, quality) => void enqueueDownload(track, { quality }),
 });
+/** 需要选择歌单时再解析管理界面 */
+const loadPlaylistPickerDialog = () => import("@/components/modals/PlaylistPickerDialog.vue");
 </script>
 
 <template>
@@ -290,7 +292,12 @@ const { items: menuItems, handleSelect: onMenuSelect } = useTrackMenu(toRef(medi
       <IconSpAmSpeakerMax class="shrink-0 w-[43px] h-10" />
     </div>
   </div>
-  <PlaylistPickerDialog v-model:open="pickerOpen" :mode="pickerMode" :tracks="pickerTracks" />
+  <SAsyncDialog
+    v-model:open="pickerOpen"
+    :loader="loadPlaylistPickerDialog"
+    :mode="pickerMode"
+    :tracks="pickerTracks"
+  />
 </template>
 
 <style scoped>

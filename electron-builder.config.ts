@@ -46,6 +46,7 @@ const config: Configuration = {
   electronLanguages: ["zh-CN", "en-US"],
   asarUnpack: ["public/**"],
   extraResources: [
+    { from: "vendor/noiselimiter", to: "noiselimiter", filter: ["**/*"] },
     { from: "vendor/bilikit", to: "bilikit", filter: ["**/*"] },
     {
       from: "native/audio-engine",

@@ -54,6 +54,9 @@ const onMenuSelect = (key: string): void => {
   else if (key === "uiZoom") uiZoomOpen.value = true;
   else if (key === "settings") showSettings();
 };
+
+/** 首次打开才解析UiZoomDialog，加载时保留操作反馈 */
+const loadUiZoomDialog = () => import("@/components/modals/UiZoomDialog.vue");
 </script>
 
 <template>
@@ -109,6 +112,6 @@ const onMenuSelect = (key: string): void => {
       <SDivider v-if="isBorderless" vertical />
       <WindowControls />
     </div>
-    <UiZoomDialog v-model:open="uiZoomOpen" />
+    <SAsyncDialog v-model:open="uiZoomOpen" :loader="loadUiZoomDialog" />
   </div>
 </template>

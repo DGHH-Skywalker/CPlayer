@@ -67,6 +67,8 @@ const emit = defineEmits<{
   dragStart: [value: number];
   /** 拖拽结束 */
   dragEnd: [value: number];
+  /** 丢失捕获或取消时不提交目标 */
+  dragCancel: [];
 }>();
 
 const slots = defineSlots<{
@@ -267,6 +269,13 @@ const onPointerUp = (): void => {
   emit("update:modelValue", dragValue.value);
   emit("dragEnd", dragValue.value);
 };
+/** 取消拖动只恢复当前显示值，不发出最终提交 */
+const onPointerCancel = (): void => {
+  if (!isDragging.value) return;
+  isDragging.value = false;
+  dragValue.value = props.modelValue;
+  emit("dragCancel");
+};
 </script>
 
 <template>
@@ -295,7 +304,8 @@ const onPointerUp = (): void => {
       @pointerdown="onPointerDown"
       @pointermove="onPointerMove"
       @pointerup="onPointerUp"
-      @pointercancel="onPointerUp"
+      @pointercancel="onPointerCancel"
+      @lostpointercapture="onPointerCancel"
     >
       <div
         class="s-slider-track absolute left-0 right-0 rounded-full transition-[height] duration-280 ease-out"
@@ -355,7 +365,8 @@ const onPointerUp = (): void => {
       @pointerdown="onPointerDown"
       @pointermove="onPointerMove"
       @pointerup="onPointerUp"
-      @pointercancel="onPointerUp"
+      @pointercancel="onPointerCancel"
+      @lostpointercapture="onPointerCancel"
     >
       <div
         class="s-slider-track absolute top-0 bottom-0 rounded-full transition-[width] duration-280 ease-out"

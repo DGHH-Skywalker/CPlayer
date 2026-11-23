@@ -777,7 +777,7 @@
       "mediaSource": "媒体源配置",
       "download": "下载配置",
       "localCache": "本地与缓存",
-      "plugins": "插件管理",
+      "plugins": "插件中心",
       "other": "其他设置",
       "about": "关于软件",
       "school": "校园点歌"
@@ -2185,6 +2185,22 @@
         "api": {
           "label": "平台接口",
           "desc": "使用当前登录态调用音乐平台接口"
+        },
+        "settings": {
+          "label": "应用设置",
+          "desc": ""
+        },
+        "browser": {
+          "label": "B 站浏览器",
+          "desc": ""
+        },
+        "dsp": {
+          "label": "音效处理",
+          "desc": ""
+        },
+        "files": {
+          "label": "选择的文件",
+          "desc": ""
         }
       }
     },

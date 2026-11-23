@@ -1,3 +1,8 @@
+import { sanitizeRegistration } from "./registration";
+import { releasePluginFiles } from "./fileAccess";
+import { builtinNoiseSource, NOISE_LIMITER_ID } from "./builtin";
+import { readPluginBundle, installBundleAssets } from "./bundle";
+import { registerDynamics, removeDynamics, degradeDynamics } from "@main/services/audioEffects";
 import { CUSTOM_BUILD } from "@shared/constants/customBuild";
 /**
  * 插件注册表
@@ -45,6 +50,7 @@ const scriptsDir = (): string => path.join(pluginsRoot(), "scripts");
 const manifestFile = (): string => path.join(pluginsRoot(), "manifest.json");
 
 interface StoredManifest {
+  seeded?: string[];
   version: 1;
   plugins: Record<string, PluginManifest>;
 }
@@ -132,6 +138,7 @@ const sanitizeSettingValue = (item: PluginSettingItem, value: unknown): unknown 
   switch (item.type) {
     case "switch":
       return Boolean(value);
+    case "slider":
     case "number": {
       let num = Number(value);
       if (!Number.isFinite(num)) num = Number(item.default);
@@ -163,6 +170,16 @@ class PluginRegistry extends EventEmitter {
       this.hostRestartAttempts = 0;
     });
     const stored = readStored();
+    if (!stored.seeded?.includes(NOISE_LIMITER_ID)) {
+      if (!stored.plugins[NOISE_LIMITER_ID]) {
+        const { source, manifest } = loadScript(builtinNoiseSource(), false);
+        manifest.fileName = `${manifest.id}.js`;
+        fs.writeFileSync(path.join(scriptsDir(), manifest.fileName), source, "utf8");
+        stored.plugins[manifest.id] = manifest;
+      }
+      stored.seeded = [...(stored.seeded ?? []), NOISE_LIMITER_ID];
+      writeStored(stored);
+    }
     const enabledMap = store.get("plugins.enabled") as Record<string, boolean>;
 
     // 首先加载 stored manifest
@@ -215,6 +232,24 @@ class PluginRegistry extends EventEmitter {
     }
     if (settingsChanged) store.set("plugins.perPlugin", settingsById);
 
+    const noise = this.runtimes.get(NOISE_LIMITER_ID);
+    if (noise?.enabled && this.getGrantedPermissions(NOISE_LIMITER_ID).includes("dsp")) {
+      const values = this.settingsOf(NOISE_LIMITER_ID);
+      const mode = values.mode === "basic" ? "basic" : "dynamic";
+      registerDynamics(NOISE_LIMITER_ID, {
+        kind: "dynamics",
+        mode,
+        strength:
+          typeof values[mode + "Strength"] === "number" &&
+          Number.isFinite(values[mode + "Strength"])
+            ? Math.min(100, Math.max(0, values[mode + "Strength"] as number))
+            : 50,
+        ceilingDb:
+          typeof values.ceilingDb === "number" && Number.isFinite(values.ceilingDb)
+            ? Math.min(-3, Math.max(-30, values.ceilingDb))
+            : -12,
+      });
+    }
     // 启动已启用的插件
     for (const rt of this.runtimes.values()) {
       if (rt.enabled) rt.initialLoad = this.start(rt).catch(() => {});
@@ -248,7 +283,8 @@ class PluginRegistry extends EventEmitter {
    */
   private settingsOf(id: string): Record<string, unknown> {
     const all = store.get("plugins.perPlugin");
-    return Object.hasOwn(all, id) ? all[id] : {};
+    const values = Object.hasOwn(all, id) ? all[id] : {};
+    return values && typeof values === "object" && !Array.isArray(values) ? values : {};
   }
 
   /**
@@ -290,6 +326,12 @@ class PluginRegistry extends EventEmitter {
       ...all,
       [id]: { ...all?.[id], [grant]: enabled },
     });
+    if (grant === "dsp" && !enabled) removeDynamics(id);
+    if (grant === "dsp" && enabled && rt.enabled) {
+      await this.stop(rt);
+      await this.start(rt);
+    }
+    if (grant === "files" && !enabled) releasePluginFiles(id);
     this.setStatus(rt, rt.status);
   }
 
@@ -315,6 +357,12 @@ class PluginRegistry extends EventEmitter {
 
   /** 导入本地脚本文件 */
   async install(filePath: string): Promise<PluginInfo> {
+    if (path.extname(filePath).toLowerCase() === ".zip") {
+      const bundle = await readPluginBundle(filePath);
+      const { manifest } = loadScript(bundle.source, false);
+      await installBundleAssets(manifest.id, bundle.files);
+      return this.installFromSource(bundle.source);
+    }
     const raw = fs.readFileSync(filePath, "utf-8");
     return this.installFromSource(raw);
   }
@@ -363,6 +411,11 @@ class PluginRegistry extends EventEmitter {
     this.runtimes.set(manifest.id, rt);
     await this.start(rt).catch(() => {});
     return this.infoOf(rt);
+  }
+
+  /** 用户主动恢复随应用分发的插件，保留已有参数 */
+  async restoreBuiltin(): Promise<void> {
+    await this.installFromSource(builtinNoiseSource());
   }
 
   /** 取插件当前的更新地址（检查到新版后由 updateInfo 持有） */
@@ -544,7 +597,8 @@ class PluginRegistry extends EventEmitter {
    */
   private async start(rt: PluginRuntime): Promise<void> {
     const id = rt.manifest.id;
-    if (pluginHost.isReady(id) || rt.loading) return; // 已就绪或正在加载
+    if (pluginHost.isReady(id) || rt.loading) return;
+    releasePluginFiles(id); // 已就绪或正在加载
     rt.loading = true;
     rt.hostSession?.abort();
     const hostSession = new AbortController();
@@ -629,7 +683,8 @@ class PluginRegistry extends EventEmitter {
           });
         }
       },
-      onRegistered: ({ events, controls, settings, menus }) => {
+      onRegistered: (input) => {
+        const { events, controls, settings, menus } = sanitizeRegistration(input);
         const before = this.hasPlaybackSubscribers();
         rt.events = events;
         rt.controls = controls;
@@ -709,6 +764,8 @@ class PluginRegistry extends EventEmitter {
    * @param rt - 待停止的插件运行时
    */
   private async stop(rt: PluginRuntime): Promise<void> {
+    releasePluginFiles(rt.manifest.id);
+    removeDynamics(rt.manifest.id);
     rt.hostSession?.abort();
     rt.loading = false;
     // 软卸载：dispose 该插件的 vm 上下文，host 进程与其它插件不受扰
@@ -738,6 +795,7 @@ class PluginRegistry extends EventEmitter {
     status: PluginStatus,
     hadSubscribers = this.hasPlaybackSubscribers(),
   ): void {
+    if (status.state === "error") degradeDynamics(rt.manifest.id);
     rt.status = status;
     this.emit("status", {
       permissions: this.permissionsOf(rt.manifest),
@@ -836,6 +894,7 @@ class PluginRegistry extends EventEmitter {
     };
     store.set("plugins.perPlugin", { ...store.get("plugins.perPlugin"), [id]: all });
     if (pluginHost.isReady(id)) pluginHost.sendSettingsUpdate(id, { [key]: sanitized });
+    this.setStatus(rt, rt.status);
   }
 
   /** 应用退出前调用 */

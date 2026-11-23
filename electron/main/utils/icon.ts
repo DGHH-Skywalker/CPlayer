@@ -1,8 +1,5 @@
 import { nativeImage, nativeTheme, NativeImage } from "electron";
-import { join } from "path";
-
-/** 图标根目录 */
-const ICONS_DIR = join(__dirname, "../../public/icons");
+import { appFile } from "./appFiles";
 
 /**
  * 加载图标文件
@@ -14,7 +11,7 @@ export const loadIcon = (
   relativePath: string,
   size?: { width: number; height: number },
 ): NativeImage => {
-  const image = nativeImage.createFromPath(join(ICONS_DIR, relativePath));
+  const image = nativeImage.createFromPath(appFile("public", "icons", relativePath));
   return size ? image.resize(size) : image;
 };
 

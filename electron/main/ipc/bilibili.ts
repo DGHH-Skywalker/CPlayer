@@ -17,9 +17,9 @@ export const registerBilibiliIpc = (): void => {
     assertTrustedSender(event);
     return playBilibiliSong(track, token, autoPlay === true);
   });
-  ipcMain.handle("bilibili:control-song", (event, command, token, position) => {
+  ipcMain.handle("bilibili:control-song", (event, command, token, position, seekId) => {
     assertTrustedSender(event);
-    return controlBilibiliSong(command, token, position);
+    return controlBilibiliSong(command, token, position, seekId);
   });
   ipcMain.handle("bilibili:command", (event, command: string, value?: unknown) => {
     assertTrustedSender(event);

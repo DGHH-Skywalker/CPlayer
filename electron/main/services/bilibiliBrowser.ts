@@ -1,3 +1,6 @@
+import { sanitizeTimeRanges } from "@shared/bilibiliTimeline";
+import { randomUUID } from "node:crypto";
+import { audioEffectEvents } from "./audioEffects";
 import { app, session, WebContentsView, clipboard } from "electron";
 import { getMainWindow } from "@main/window";
 import { sendToMain } from "@main/utils/broadcast";
@@ -40,6 +43,9 @@ let mediaPlaying = false;
 let songGeneration = -1;
 let songRequest: string | null = null;
 let songWantsPlay = false;
+let currentSeekId: string | undefined;
+let currentSeekOrder = 0;
+let cutoffMuted = false;
 let songButton: BilibiliSongButton | null = null;
 
 const coordinator = new MvAudioCoordinator({
@@ -126,6 +132,7 @@ const reportSong = (input: unknown): void => {
   const event = input as BilibiliSongEvent;
   if (
     event.token !== active.token ||
+    (currentSeekId !== undefined && event.seekId !== currentSeekId) ||
     active.state === "ended" ||
     active.state === "stopped" ||
     !["playing", "paused", "loading", "ended", "error"].includes(event.state) ||
@@ -142,10 +149,21 @@ const reportSong = (input: unknown): void => {
     state: event.state,
     position: Math.max(0, event.position),
     duration: Math.max(0, event.duration),
+    seekId: currentSeekId,
+    seekOrder: currentSeekOrder,
+    seekPhase: ["seeking", "seeked", "failed"].includes(event.seekPhase ?? "")
+      ? event.seekPhase
+      : undefined,
+    buffering: event.buffering === true,
+    paused: event.paused === true,
+    buffered: sanitizeTimeRanges(event.buffered, Math.max(0, event.duration)),
+    seekable: sanitizeTimeRanges(event.seekable, Math.max(0, event.duration)),
   };
   biliSongTransport.current = next;
   if (
     event.state === "loading" &&
+    event.reason === "metadata" &&
+    !event.seekPhase &&
     songWantsPlay &&
     visible &&
     getMainWindow()?.isVisible() &&
@@ -198,6 +216,8 @@ export const playBilibiliSong = async (
   )
     throw new Error("哔哩Song 参数无效");
   songRequest = token;
+  currentSeekId = undefined;
+  currentSeekOrder = 0;
   songWantsPlay = autoPlay;
   await create();
   if (songRequest !== token || !schoolAllowsPlayback()) return;
@@ -241,14 +261,16 @@ export const playBilibiliSong = async (
  * @param position - 毫秒进度
  */
 export const controlBilibiliSong = async (
-  command: "play" | "pause" | "stop" | "seek",
+  command: "play" | "pause" | "stop" | "seek" | "inspect",
   token: string,
   position?: number,
-): Promise<void> => {
+  seekId?: string,
+): Promise<{ seekId?: string; seekOrder?: number } | void> => {
   const active = biliSongTransport.current;
   if (command === "stop" && songRequest === token) songRequest = null;
   if (!active || active.token !== token) return;
-  if (!["play", "pause", "stop", "seek"].includes(command)) throw new Error("无效网页播放操作");
+  if (!["play", "pause", "stop", "seek", "inspect"].includes(command))
+    throw new Error("无效网页播放操作");
   if (command === "play" || command === "pause" || command === "stop")
     songWantsPlay = command === "play";
   if (
@@ -258,17 +280,28 @@ export const controlBilibiliSong = async (
     throw new Error("校园播放已锁定");
   if (command === "seek" && (!Number.isFinite(position) || position! < 0))
     throw new Error("进度无效");
+  if (command === "seek") {
+    if (seekId !== undefined && (typeof seekId !== "string" || seekId.length > 64 || !seekId))
+      throw new Error("定位请求无效");
+    currentSeekId = seekId ?? randomUUID();
+    currentSeekOrder++;
+  }
+  if (command === "inspect" && seekId !== currentSeekId) return;
   if (command === "stop") {
+    currentSeekId = undefined;
     view?.webContents.setAudioMuted(true);
     biliSongTransport.current = null;
     sendToMain("bilibili:song", { ...active, state: "stopped" });
   }
+  const operationSeekId = currentSeekId;
+  const operationSeekOrder = currentSeekOrder;
   await view?.webContents
     .executeJavaScript(
-      `window.__carbonvSongControl?.(${JSON.stringify(command)}, ${JSON.stringify(position ?? 0)}, ${JSON.stringify(token)})`,
+      `window.__carbonvSongControl?.(${JSON.stringify(command)}, ${JSON.stringify(position ?? 0)}, ${JSON.stringify(token)}, ${JSON.stringify(operationSeekId ?? "")})`,
       true,
     )
     .catch(() => {});
+  return { seekId: operationSeekId, seekOrder: operationSeekOrder };
 };
 
 biliSongTransport.control = async (command, position) => {
@@ -504,6 +537,15 @@ const create = async (): Promise<void> => {
  */
 const reportMedia = async (playing: boolean): Promise<void> => {
   mediaPlaying = playing;
+  if (!schoolAllowsPlayback() && (cutoffMuted || store.get("school.bilibili.pauseOnClass"))) {
+    coordinator.invalidate();
+    view?.webContents.setAudioMuted(true);
+    if (playing) await pauseMedia();
+    mediaPlaying = false;
+    publish();
+    return;
+  }
+  if (schoolAllowsPlayback()) cutoffMuted = false;
   if (biliSongTransport.current) {
     if (playing && (!visible || !getMainWindow()?.isVisible() || getMainWindow()?.isMinimized()))
       await controlBilibiliSong("pause", biliSongTransport.current.token);
@@ -530,11 +572,15 @@ const reportMedia = async (playing: boolean): Promise<void> => {
 
 /** 上课时作废所有 MV 自动恢复任务，按配置暂停网页 */
 export const onSchoolCutoff = (): void => {
+  cutoffMuted = !!biliSongTransport.current || store.get("school.bilibili.pauseOnClass");
   songRequest = null;
   coordinator.invalidate();
   updateSongButton();
   if (biliSongTransport.current) void controlBilibiliSong("stop", biliSongTransport.current.token);
-  if (store.get("school.bilibili.pauseOnClass")) void pauseMedia();
+  if (store.get("school.bilibili.pauseOnClass")) {
+    view?.webContents.setAudioMuted(true);
+    void pauseMedia();
+  }
 };
 
 /** 销毁视图与其注入资源，保留独立会话数据 */
@@ -715,6 +761,10 @@ export const bilibiliCommand = async (command: string, value?: unknown): Promise
   publish();
   return getBilibiliState();
 };
+
+audioEffectEvents.on("changed", () => {
+  void loader?.updateAudioEffects().catch((error) => coreLog.warn("浏览器音效同步失败", error));
+});
 
 schoolEvents.on("cutoff", onSchoolCutoff);
 schoolEvents.on("configured", () => {

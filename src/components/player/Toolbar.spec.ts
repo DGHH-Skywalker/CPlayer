@@ -37,6 +37,7 @@ const mountToolbar = () => {
         SPopover: { template: '<div><slot name="trigger" /><slot /></div>' },
         SButton: { template: '<button><slot name="icon" /><slot /></button>' },
         SDropdownMenu: { template: "<div><slot /></div>" },
+        SAsyncDialog: true,
         EqualizerDialog: true,
         SpeedDialog: true,
         AutoCloseDialog: true,

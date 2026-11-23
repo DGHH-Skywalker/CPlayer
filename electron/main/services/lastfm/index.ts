@@ -12,6 +12,8 @@ let session: credentials.LastfmCredentials | null = null;
 let connecting = false;
 /** 取消授权标志 */
 let cancelFlag = false;
+let sessionReady: Promise<void> | undefined;
+let sessionRevision = 0;
 
 /** 读取实时配置 */
 const cfg = () => store.get("lastfm");
@@ -19,37 +21,53 @@ const cfg = () => store.get("lastfm");
 /** 延时 */
 const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** 启动初始化：载入本地凭证并接线 scrobbler 回调 */
-export const init = async (): Promise<void> => {
-  session = await credentials.load();
-  if (session) lastfmLog.info(`已载入 Last.fm 凭证: ${session.username}`);
+/** 首屏后或首次真实上报时读取凭证，多个请求共享一次解密 */
+export const loadSession = (): Promise<void> => {
+  if (sessionReady) return sessionReady;
+  const revision = sessionRevision;
+  sessionReady = credentials.load().then((stored) => {
+    if (revision !== sessionRevision) return;
+    session = stored;
+    if (session) lastfmLog.info(`已载入 Last.fm 凭证: ${session.username}`);
+  });
+  return sessionReady;
+};
+
+/** 启动同步接线，凭证异步读取不能漏掉第一首歌的打卡事件 */
+export const init = (): void => {
   scrobbler.setHandlers({
     onNowPlaying: (track) => {
-      const config = cfg();
-      if (!config.enabled || !config.nowPlaying || !session) return;
-      client
-        .updateNowPlaying(
-          session.sessionKey,
-          track.title,
-          track.artist,
-          track.album || undefined,
-          track.durationSec || undefined,
-        )
+      if (!cfg().enabled || !cfg().nowPlaying) return;
+      void loadSession()
+        .then(async () => {
+          const config = cfg();
+          if (!config.enabled || !config.nowPlaying || !session) return;
+          await client.updateNowPlaying(
+            session.sessionKey,
+            track.title,
+            track.artist,
+            track.album || undefined,
+            track.durationSec || undefined,
+          );
+        })
         .catch((err) => lastfmLog.warn("updateNowPlaying 失败:", err));
     },
     onScrobble: (track) => {
-      const config = cfg();
-      if (!config.enabled || !config.scrobble || !session) return;
-      client
-        .scrobble(
-          session.sessionKey,
-          track.title,
-          track.artist,
-          track.timestamp,
-          track.album || undefined,
-          track.durationSec || undefined,
-        )
-        .then(() => lastfmLog.debug(`scrobble: ${track.artist} - ${track.title}`))
+      if (!cfg().enabled || !cfg().scrobble) return;
+      void loadSession()
+        .then(async () => {
+          const config = cfg();
+          if (!config.enabled || !config.scrobble || !session) return;
+          await client.scrobble(
+            session.sessionKey,
+            track.title,
+            track.artist,
+            track.timestamp,
+            track.album || undefined,
+            track.durationSec || undefined,
+          );
+          lastfmLog.debug(`scrobble: ${track.artist} - ${track.title}`);
+        })
         .catch((err) => lastfmLog.warn("scrobble 失败:", err));
     },
   });
@@ -125,6 +143,7 @@ export const connect = async (): Promise<LastfmConnectResult> => {
       if (cancelFlag) return { connected: false, reason: "canceled" };
       try {
         const result = await client.getSession(token);
+        sessionRevision++;
         session = { username: result.name, sessionKey: result.key };
         await credentials.save(result.name, result.key);
         lastfmLog.info(`已连接 Last.fm: ${result.name}`);
@@ -146,6 +165,8 @@ export const connect = async (): Promise<LastfmConnectResult> => {
 
 /** 断开并清除凭证 */
 export const disconnect = (): void => {
+  sessionRevision++;
+  sessionReady = Promise.resolve();
   session = null;
   credentials.clear();
   scrobbler.reset();

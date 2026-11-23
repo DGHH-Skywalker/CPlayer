@@ -19,6 +19,7 @@ vi.mock("@main/utils/nativeLoader", () => ({
   loadNativeModule: () => ({
     AudioPlayer: mocks.MockPlayer,
     initLogger: vi.fn(),
+    configureDynamics: vi.fn(),
     setHttpProxy: vi.fn(),
   }),
 }));

@@ -40,6 +40,9 @@ jobs:
           node-version: 24.22.1
           cache: pnpm
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.100.0
+          targets: wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: carbonv-windows-x64
@@ -51,6 +54,10 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Verify vendored Core checksum
         run: node scripts/verify-bilikit.mjs
+      - name: Test portable dynamics core
+        run: pnpm test:dynamics
+      - name: Build shared native and browser dynamics resource
+        run: pnpm build:dynamics
       - name: Check types
         run: pnpm typecheck
       - name: Lint
@@ -69,6 +76,10 @@ jobs:
       - name: Build native modules and Windows packages
         id: package
         run: pnpm build:win --x64 --publish never
+      - name: Record lazy loading bundle graph
+        run: pnpm audit:startup out/renderer/assets dist/startup-bundle-audit.json
+      - name: Native audio regression tests
+        run: cargo test -p audio-engine --lib
       - name: Launch packaged portable app and check class gate
         run: pnpm exec tsx scripts/test-packaged-windows.ts
       - name: Record build provenance
@@ -93,6 +104,10 @@ jobs:
           path: |
             dist/*-setup.exe
             dist/*-portable.exe
+            dist/*.cplayer.zip
+            dist/plugin-acceptance.json
+            dist/startup-acceptance.json
+            dist/startup-bundle-audit.json
             dist/portable-smoke.log
             dist/acceptance-result.json
             dist/bilibili-layout.json

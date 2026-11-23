@@ -25,6 +25,7 @@ watch(
     const saved = await window.api.config.get("system.uiZoom");
     percent.value = typeof saved === "number" ? saved : 100;
   },
+  { immediate: true },
 );
 </script>
 

@@ -1,3 +1,4 @@
+import { cancelBilibiliSeek, acceptBilibiliPosition, seekBilibili } from "./bilibiliSeek";
 import type { Track } from "@shared/types/player";
 import type { BilibiliSongEvent } from "@shared/types/bilibili";
 import { useStatusStore } from "@/stores/status";
@@ -38,11 +39,13 @@ export const handleBilibiliSongEvent = async (event: BilibiliSongEvent): Promise
     return;
   const status = useStatusStore();
   if (status.currentTrack?.id !== owner.id || useMediaStore().track?.id !== owner.id) return;
+  if (!acceptBilibiliPosition(event)) return;
   status.position = event.position;
   status.duration = event.duration;
   playback.setCurrentTime(event.position, { force: true });
   playback.setDuration(event.duration);
   if (event.state === "ended") {
+    cancelBilibiliSeek();
     owner.finished = true;
     playback.setPlaying(false);
     status.state = "stopped";
@@ -94,6 +97,7 @@ export const handleBilibiliSongEvent = async (event: BilibiliSongEvent): Promise
  */
 export const startBilibiliSong = async (track: Track, autoPlay: boolean): Promise<void> => {
   if (!schoolState.value.config.bilibili.biliSongEnabled) throw new Error("请先启用实验性哔哩Song");
+  cancelBilibiliSeek();
   const previous = active;
   const owner = {
     token: crypto.randomUUID(),
@@ -120,6 +124,7 @@ export const startBilibiliSong = async (track: Track, autoPlay: boolean): Promis
 
 /** 停止并作废当前网页项，空状态下无需发送 IPC */
 export const stopBilibiliSong = async (): Promise<void> => {
+  cancelBilibiliSeek();
   revision++;
   const owner = active;
   active = null;
@@ -136,7 +141,17 @@ export const controlBilibiliSong = async (
   position?: number,
 ): Promise<void> => {
   const owner = active;
-  if (!owner || !canRequestNow()) return;
+  if (!owner || owner.finished || !canRequestNow()) return;
+  if (command === "seek") {
+    if (position !== undefined)
+      await seekBilibili(
+        owner.token,
+        position,
+        () =>
+          active === owner && canRequestNow() && owner.generation === schoolState.value.generation,
+      );
+    return;
+  }
   if (command === "play") {
     useStatusStore().isPlayerExpanded = false;
     const { default: router } = await import("@/router");

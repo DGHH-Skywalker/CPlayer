@@ -1,12 +1,25 @@
+import { defineAsyncComponent } from "vue";
 import type { SettingCategory } from "@/types/settings-schema";
 import { ALL_PLATFORMS } from "@shared/types/platform";
 import { useSettingsStore } from "@/stores/settings";
-import AmllDbServerConfig from "@/components/settings/custom/AmllDbServerConfig.vue";
-import LocalLyricRepoConfig from "@/components/settings/custom/LocalLyricRepoConfig.vue";
-import LyricSourceOrderConfig from "@/components/settings/custom/LyricSourceOrderConfig.vue";
-import LyricFormatOrderConfig from "@/components/settings/custom/LyricFormatOrderConfig.vue";
-import ExcludeLyricsConfig from "@/components/settings/custom/ExcludeLyricsConfig.vue";
 import IconLucideMic2 from "~icons/lucide/mic-2";
+
+/** 自定义设置只在对应区域挂载时解析 */
+const AmllDbServerConfig = defineAsyncComponent(
+  () => import("@/components/settings/custom/AmllDbServerConfig.vue"),
+);
+const LocalLyricRepoConfig = defineAsyncComponent(
+  () => import("@/components/settings/custom/LocalLyricRepoConfig.vue"),
+);
+const LyricSourceOrderConfig = defineAsyncComponent(
+  () => import("@/components/settings/custom/LyricSourceOrderConfig.vue"),
+);
+const LyricFormatOrderConfig = defineAsyncComponent(
+  () => import("@/components/settings/custom/LyricFormatOrderConfig.vue"),
+);
+const ExcludeLyricsConfig = defineAsyncComponent(
+  () => import("@/components/settings/custom/ExcludeLyricsConfig.vue"),
+);
 
 /** 来源偏好选项：auto + 全部平台（来自平台总表）+ self */
 const lyricSourcePreferenceOptions = [

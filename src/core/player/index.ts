@@ -1530,91 +1530,95 @@ export const moveInQueue = (fromIndex: number, toIndex: number): void => {
 let unsubscribe: (() => void) | null = null;
 let stopQueueIndexSync: (() => void) | null = null;
 let stopPlayModeSync: (() => void) | null = null;
-let initialized = false;
+let initialization: Promise<void> | undefined;
 
-/** 初始化播放器 */
-export const initPlayer = async (): Promise<void> => {
-  if (initialized) return;
-  initialized = true;
-  console.log("[player] init");
-  // 先从主进程同步后端配置，确保 system 设置可用
-  const settings = useSettingsStore();
-  await settings.syncSystem();
-  // 流媒体 store 必须在恢复队列前就绪，否则队列里的 streaming track 拿不到 cfg
-  await useStreamingStore().init();
-  if (window.api.school) await initSchoolBridge();
-  if (!isSchoolMode()) await queue.restoreQueue();
-  const status = useStatusStore();
-  stopQueueIndexSync = watch(
-    () => status.currentIndex,
-    (index) => window.api.player.syncQueueIndex(index),
-    { immediate: true },
-  );
-  // 进入或退出心动 / 私人 FM 时生效的随机、循环模式随之变化
-  stopPlayModeSync = watch([() => status.heartMode, () => status.fmMode], () => syncPlayMode());
-  // 独立来源曲目恢复前等待所属插件，其余插件继续在后台启动。
-  await usePluginsStore().load(
-    status.currentTrack?.source === "plugin" ? status.currentTrack.plugin?.pluginId : undefined,
-  );
-  // 兼容移除“不循环”前持久化的旧状态
-  if ((status.repeatMode as string) === "off") status.repeatMode = "list";
-  // 恢复上次的音量和播放模式到主进程
-  await window.api.player.setVolume(status.volume);
-  syncPlayMode();
-  // 应用渐入渐出配置
-  const { fadeEnabled, fadeDuration, loudnessNormalization, equalizer } = settings.system.player;
-  await window.api.player.setFadeDuration(fadeEnabled ? fadeDuration : 0);
-  // 应用音量均衡配置
-  await window.api.player.setNormalizationEnabled(loudnessNormalization ?? false);
-  // 应用均衡器配置
-  if (equalizer) {
-    await window.api.player.setEqualizerBands([...equalizer.bands]);
-    await window.api.player.setPreampGain(equalizer.preamp);
-    await window.api.player.setEqualizerEnabled(equalizer.enabled);
-  }
-  // 刷新设备列表并恢复上次选择的输出设备
-  await refreshDevices();
-  await window.api.player.setPauseOnDeviceSwitch(settings.player.pauseOnDeviceSwitch);
-  if (settings.player.outputDevice) {
-    // 1.0.0 及更早版本存的是显示名，就地换成稳定 ID；设备当前不在线时保留原值等下次启动
-    const legacy = useStatusStore().outputDevices.find(
-      (device) => device.name === settings.player.outputDevice,
+/**
+ * 准备播放与歌词核心，同一初始化任务由所有调用方等待
+ * @returns 校园清理、音频参数及事件接线全部完成后就绪
+ */
+export const initPlayer = (): Promise<void> => {
+  initialization ??= (async () => {
+    console.log("[player] init");
+    const settings = useSettingsStore();
+    // 配置读取与校园清理互不依赖；清理完成前绝不恢复队列
+    await Promise.all([
+      settings.syncSystem(),
+      useStreamingStore().init(),
+      window.api.school ? initSchoolBridge() : undefined,
+    ]);
+    if (!isSchoolMode()) await queue.restoreQueue();
+    const status = useStatusStore();
+    stopQueueIndexSync = watch(
+      () => status.currentIndex,
+      (index) => window.api.player.syncQueueIndex(index),
+      { immediate: true },
     );
-    if (legacy) settings.player.outputDevice = legacy.id;
-    await window.api.player.setOutputDevice(settings.player.outputDevice);
-  }
-  // 若启用独立设备音量记忆，恢复当前活跃设备的记忆音量
-  if (settings.player.rememberDeviceVolume) {
-    await applySavedVolumeForActiveDevice();
-  }
-  // 先订阅事件，确保 load 触发播放后 position 事件能被接收
-  if (unsubscribe) unsubscribe();
-  unsubscribe = window.api.player.onEvent(handleEvent);
-  // 安装播放统计累加器
-  installPlayStats();
-  // 订阅主进程下发的歌词偏移变化
-  const media = useMediaStore();
-  // 当前歌曲喜欢状态变化时同步到托盘菜单
-  const fav = useFavorite();
-  watch(
-    () => fav.isLiked(media.track),
-    (liked) => window.api.player.syncLikeState(liked),
-    { immediate: true },
-  );
-  window.api.nowPlaying.onLyricOffsetChange(({ offsetMs }) => {
-    status.lyricOffsetMs = offsetMs;
-    media.updateLyricIndex(playback.getCurrentTime() + offsetMs);
-  });
-  // 获取歌曲偏移
-  try {
-    const snap = await window.api.nowPlaying.requestSnapshot();
-    status.lyricOffsetMs = snap.lyricOffsetMs;
-  } catch (error) {
-    console.error("[player] requestSnapshot failed", error);
-  }
-  // 下一首预载的监听器
-  installNextTrackPreloadWatchers();
-  scheduleNextTrackPreload();
+    stopPlayModeSync = watch([() => status.heartMode, () => status.fmMode], () => syncPlayMode());
+    if ((status.repeatMode as string) === "off") status.repeatMode = "list";
+    syncPlayMode();
+    const media = useMediaStore();
+    const fav = useFavorite();
+    watch(
+      () => fav.isLiked(media.track),
+      (liked) => window.api.player.syncLikeState(liked),
+      { immediate: true },
+    );
+    window.api.nowPlaying.onLyricOffsetChange(({ offsetMs }) => {
+      status.lyricOffsetMs = offsetMs;
+      media.updateLyricIndex(playback.getCurrentTime() + offsetMs);
+    });
+    const { fadeEnabled, fadeDuration, loudnessNormalization, equalizer } = settings.system.player;
+    const volumeReady = window.api.player.setVolume(status.volume);
+    await Promise.all([
+      // 仅恢复曲目所属插件需要等待，其余插件继续在主进程后台加载
+      usePluginsStore().load(
+        status.currentTrack?.source === "plugin" ? status.currentTrack.plugin?.pluginId : undefined,
+      ),
+      volumeReady,
+      window.api.player.setFadeDuration(fadeEnabled ? fadeDuration : 0),
+      window.api.player.setNormalizationEnabled(loudnessNormalization ?? false),
+      (async () => {
+        if (!equalizer) return;
+        await Promise.all([
+          window.api.player.setEqualizerBands([...equalizer.bands]),
+          window.api.player.setPreampGain(equalizer.preamp),
+        ]);
+        await window.api.player.setEqualizerEnabled(equalizer.enabled);
+      })(),
+      (async () => {
+        await Promise.all([
+          refreshDevices(),
+          window.api.player.setPauseOnDeviceSwitch(settings.player.pauseOnDeviceSwitch),
+        ]);
+        if (settings.player.outputDevice) {
+          const legacy = status.outputDevices.find(
+            (device) => device.name === settings.player.outputDevice,
+          );
+          if (legacy) settings.player.outputDevice = legacy.id;
+          await window.api.player.setOutputDevice(settings.player.outputDevice);
+        }
+        // 设备切换完成后再恢复独立音量，避免套用到默认设备
+        if (settings.player.rememberDeviceVolume) {
+          await volumeReady;
+          await applySavedVolumeForActiveDevice();
+        }
+      })(),
+      window.api.nowPlaying
+        .requestSnapshot()
+        .then((snap) => {
+          status.lyricOffsetMs = snap.lyricOffsetMs;
+        })
+        .catch((error) => console.error("[player] requestSnapshot failed", error)),
+    ]);
+    // 参数阶段的空闲进度不能覆盖上次曲目位置；真正 load 前再接入音频事件
+    unsubscribe?.();
+    unsubscribe = window.api.player.onEvent(handleEvent);
+    installPlayStats();
+    installNextTrackPreloadWatchers();
+    scheduleNextTrackPreload();
+    performance.mark("carbonv:player-ready");
+  })();
+  return initialization;
 };
 
 /** 恢复上次播放状态 */

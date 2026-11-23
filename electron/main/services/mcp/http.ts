@@ -1,7 +1,5 @@
 import type { Server } from "node:http";
 import { randomBytes, timingSafeEqual } from "node:crypto";
-import { Hono } from "hono";
-import { serve } from "@hono/node-server";
 import { store } from "@main/store";
 import { broadcast } from "@main/utils/broadcast";
 import { serverLog } from "@main/utils/logger";
@@ -65,8 +63,8 @@ export const startMcpServer = (): Promise<McpStatus> => {
   if (starting) return starting;
   if (runningServer) return Promise.resolve(getMcpStatus());
 
-  starting = import("./server")
-    .then(({ createMcpEndpoint }) => {
+  starting = Promise.all([import("./server"), import("hono"), import("@hono/node-server")])
+    .then(([{ createMcpEndpoint }, { Hono }, { serve }]) => {
       if (!startRequested || !store.get("mcp.enabled")) return getMcpStatus();
       return new Promise<McpStatus>((resolve) => {
         const port = store.get("mcp.port");

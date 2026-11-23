@@ -1,10 +1,19 @@
+import { defineAsyncComponent } from "vue";
 import type { SettingCategory } from "@/types/settings-schema";
 import { useSettingsStore } from "@/stores/settings";
 import { useThemeStore } from "@/stores/theme";
-import FontConfig from "@/components/settings/custom/FontConfig.vue";
-import BackgroundImagePicker from "@/components/settings/custom/BackgroundImagePicker.vue";
-import SidebarCustomizeConfig from "@/components/settings/custom/SidebarCustomizeConfig.vue";
 import IconLucidePalette from "~icons/lucide/palette";
+
+/** 自定义设置只在对应区域挂载时解析 */
+const FontConfig = defineAsyncComponent(
+  () => import("@/components/settings/custom/FontConfig.vue"),
+);
+const BackgroundImagePicker = defineAsyncComponent(
+  () => import("@/components/settings/custom/BackgroundImagePicker.vue"),
+);
+const SidebarCustomizeConfig = defineAsyncComponent(
+  () => import("@/components/settings/custom/SidebarCustomizeConfig.vue"),
+);
 
 const appearanceCategory: SettingCategory = {
   id: "appearance",

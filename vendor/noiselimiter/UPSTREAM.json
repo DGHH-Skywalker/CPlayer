@@ -1,0 +1,8 @@
+{
+  "project": "CamillaDSP",
+  "url": "https://github.com/HEnquist/camilladsp",
+  "commit": "05e9cfcdf43c0dfe078ed3feb8af4c8bd701fd74",
+  "license": "MPL-2.0",
+  "adapted": ["src/processors/compressor.rs", "src/filters/limiter.rs"],
+  "notes": "动态包络与软拐点增益算法改写为独立 Rust/WASM 核心，保留参考源码与许可"
+}

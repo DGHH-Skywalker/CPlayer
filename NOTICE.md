@@ -15,3 +15,7 @@ Core 来源、固定提交与校验值见 [vendor/bilikit/manifest.json](vendor/
 ## 其他依赖
 
 第三方依赖保留各自许可证；程序构建同时保留 Electron 和依赖所需的许可文件。平台商标、音乐、视频和账号数据归相应权利人所有。
+
+## NoiseLimiter / CamillaDSP
+
+动态处理参考并改写 CamillaDSP，Copyright (C) 2026 Henrik Enquist。固定提交、原始文件和 MPL-2.0 / GPL-3.0 许可位于 [vendor/noiselimiter/UPSTREAM.json](vendor/noiselimiter/UPSTREAM.json) 与同目录 camilladsp；改写文件选用 MPL-2.0，完整应用仍按 AGPL-3.0 分发。

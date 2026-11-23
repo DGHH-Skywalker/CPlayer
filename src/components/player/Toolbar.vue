@@ -77,6 +77,17 @@ const onMoreMenuSelect = (key: string): void => {
   else if (key === "abLoop") abLoopOpen.value = true;
   else if (key === "autoClose") autoCloseOpen.value = true;
 };
+
+/** 首次打开才解析EqualizerDialog，加载时保留操作反馈 */
+const loadEqualizerDialog = () => import("@/components/modals/EqualizerDialog.vue");
+/** 首次打开才解析SpeedDialog，加载时保留操作反馈 */
+const loadSpeedDialog = () => import("@/components/modals/SpeedDialog.vue");
+/** 首次打开才解析AbLoopDialog，加载时保留操作反馈 */
+const loadAbLoopDialog = () => import("@/components/modals/AbLoopDialog.vue");
+/** 首次打开才解析AutoCloseDialog，加载时保留操作反馈 */
+const loadAutoCloseDialog = () => import("@/components/modals/AutoCloseDialog.vue");
+/** 首次打开才解析FmModeDialog，加载时保留操作反馈 */
+const loadFmModeDialog = () => import("@/components/modals/FmModeDialog.vue");
 </script>
 
 <template>
@@ -193,10 +204,10 @@ const onMoreMenuSelect = (key: string): void => {
         </SButton>
       </template>
     </SDropdownMenu>
-    <EqualizerDialog v-model:open="equalizerOpen" />
-    <SpeedDialog v-model:open="speedOpen" />
-    <AbLoopDialog v-model:open="abLoopOpen" />
-    <AutoCloseDialog v-model:open="autoCloseOpen" />
-    <FmModeDialog v-model:open="fmModeOpen" />
+    <SAsyncDialog v-model:open="equalizerOpen" :loader="loadEqualizerDialog" />
+    <SAsyncDialog v-model:open="speedOpen" :loader="loadSpeedDialog" />
+    <SAsyncDialog v-model:open="abLoopOpen" :loader="loadAbLoopDialog" />
+    <SAsyncDialog v-model:open="autoCloseOpen" :loader="loadAutoCloseDialog" />
+    <SAsyncDialog v-model:open="fmModeOpen" :loader="loadFmModeDialog" />
   </div>
 </template>

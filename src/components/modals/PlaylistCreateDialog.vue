@@ -41,6 +41,7 @@ watch(
     privacy.value = 0;
     submitting.value = false;
   },
+  { immediate: true },
 );
 
 const handleConfirm = async (): Promise<void> => {
