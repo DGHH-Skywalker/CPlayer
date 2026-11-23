@@ -124,6 +124,7 @@ const evaluate = async <T>(client: DebugClient, expression: string): Promise<T> 
   const result = (await client.send("Runtime.evaluate", {
     expression,
     awaitPromise: true,
+    userGesture: true,
     returnByValue: true,
   })) as Evaluation;
   if (result.exceptionDetails) throw new Error(JSON.stringify(result.exceptionDetails));
@@ -461,6 +462,21 @@ cplayer.settings.get('player.autoPlay').then(v=>cplayer.settings.set('player.aut
   await writeFile("dist/bilibili-layout.json", JSON.stringify(layout, null, 2));
   const remotePage = await waitForPage("bilibili");
   browserClient = await connect(remotePage.webSocketDebuggerUrl);
+  let browserDocumentReady = false;
+  for (let i = 0; i < 200; i++) {
+    try {
+      browserDocumentReady = await evaluate<boolean>(
+        browserClient,
+        "location.hostname === 'search.bilibili.com' && document.readyState !== 'loading' && !!document.body",
+      );
+      if (browserDocumentReady) break;
+    } catch {
+      /* 跨进程导航期间执行上下文暂不可用，等待新文档 */
+    }
+    await delay(100);
+  }
+  assert.ok(browserDocumentReady, "B站首页文档尚未就绪，不能注入媒体验收夹具");
+
   const focusTone = Buffer.alloc(44 + 8000 * 10 * 2);
   focusTone.write("RIFF");
   focusTone.writeUInt32LE(focusTone.length - 8, 4);

@@ -100,9 +100,11 @@ export const seekBilibili = async (
  * @returns 是否已确认真实位置
  */
 export const acceptBilibiliPosition = (event: BilibiliSongEvent): boolean => {
-  if (event.seekOrder !== undefined && event.seekOrder < lastSeekOrder) return false;
+  // owner 校验由调用方完成，终态不能被在途定位的旧序号吞掉
+  const terminal = ["ended", "error", "stopped"].includes(event.state);
+  if (!terminal && event.seekOrder !== undefined && event.seekOrder < lastSeekOrder) return false;
   let request = pending;
-  if (request && event.seekId !== request.id) {
+  if (!terminal && request && event.seekId !== request.id) {
     if (
       request.order !== undefined &&
       event.seekOrder !== undefined &&

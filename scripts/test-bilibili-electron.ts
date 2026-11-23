@@ -65,7 +65,19 @@ const run = async (): Promise<void> => {
     }
     if (url.pathname === "/focus")
       return new Response(
-        `<!doctype html><video src="/focus.wav" autoplay muted loop></video><script>document.addEventListener('visibilitychange',()=>{if(document.hidden)document.querySelector('video').pause()})</script>`,
+        `<!doctype html><script>
+          const NativeWorklet=AudioWorkletNode;
+          window.AudioWorkletNode=class extends NativeWorklet {constructor(...args){super(...args);window.testWorklet=this;}};
+          const nativeConnect=AudioNode.prototype.connect;
+          AudioNode.prototype.connect=function(...args){
+            const result=nativeConnect.apply(this,args);
+            if(this instanceof WaveShaperNode && args[0]===this.context.destination){
+              window.testFallbackConnections=(window.testFallbackConnections||0)+1;
+              const analyser=this.context.createAnalyser();this.connect(analyser);window.testFallbackAnalyser=analyser;
+            }
+            return result;
+          };
+        </script><video src="/focus.wav" autoplay muted loop></video><script>document.addEventListener('visibilitychange',()=>{if(document.hidden)document.querySelector('video').pause()})</script>`,
         { headers: { "content-type": "text/html" } },
       );
     if (url.pathname.startsWith("/video/"))
@@ -391,6 +403,35 @@ const run = async (): Promise<void> => {
     JSON.stringify(stricter),
   );
   assert.equal(wc.getURL(), urlBefore);
+  await wc.executeJavaScript("window.testWorklet.onprocessorerror()");
+  await new Promise((done) => setTimeout(done, 500));
+  const fallback = await wc.executeJavaScript(
+    `(()=>{const analyser=window.testFallbackAnalyser;const values=new Float32Array(analyser.fftSize);analyser.getFloatTimeDomainData(values);return {connections:window.testFallbackConnections,peak:Math.max(...values.map(Math.abs)),paused:document.querySelector('video').paused,status:window.__carbonvDynamics.status()};})()`,
+  );
+  assert.equal(fallback.connections, 2, "处理器异常后没有恢复输出连接");
+  assert.ok(
+    fallback.peak > 0.01 && fallback.peak <= 10 ** (-18 / 20) + 1e-4,
+    JSON.stringify(fallback),
+  );
+  assert.equal(fallback.paused, false);
+  assert.equal(fallback.status.reports[0].state, "fallback");
+  console.log("真实处理器故障后保守限幅保持非零安全输出验证通过", fallback);
+  await wc.executeJavaScript("document.querySelector('video').pause()");
+  for (
+    let i = 0;
+    i < 50 &&
+    (await wc.executeJavaScript("window.__carbonvDynamics.status().context")) !== "suspended";
+    i++
+  )
+    await new Promise((done) => setTimeout(done, 20));
+  assert.equal(
+    await wc.executeJavaScript("window.__carbonvDynamics.status().context"),
+    "suspended",
+    "暂停后音效上下文仍持续运算",
+  );
+  await wc.executeJavaScript("document.querySelector('video').play()", true);
+  assert.equal(await wc.executeJavaScript("window.__carbonvDynamics.status().context"), "running");
+  console.log("媒体暂停挂起音效上下文，显式播放后恢复验证通过");
   removeDynamics("fixture");
   await loader.updateAudioEffects();
   assert.equal(await wc.executeJavaScript("window.__carbonvDynamics.status().enabled"), false);

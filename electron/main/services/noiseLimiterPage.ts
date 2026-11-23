@@ -31,7 +31,15 @@ export const noiseLimiterBootstrap = (): string => {
     r = loadResources();
   } catch (error) {
     coreLog.error("NoiseLimiter 本地资源不可用", error);
-    return `(()=>{if(location.protocol!=='https:'||!(location.hostname==='bilibili.com'||location.hostname.endsWith('.bilibili.com')))return;let enabled=${JSON.stringify(state.enabled)};const play=HTMLMediaElement.prototype.play;HTMLMediaElement.prototype.play=function(...args){if(!enabled)return play.apply(this,args);this.pause();return Promise.reject(new Error('NoiseLimiter 资源不可用'))};window.__carbonvDynamics={update:s=>{enabled=s.enabled;if(enabled)for(const v of document.querySelectorAll('video,audio'))v.pause()},status:()=>({enabled,error:true})};if(enabled)for(const v of document.querySelectorAll('video,audio'))v.pause()})();`;
+    return `(()=>{
+      if(location.protocol!=='https:'||!(location.hostname==='bilibili.com'||location.hostname.endsWith('.bilibili.com')))return;
+      let enabled=${JSON.stringify(state.enabled)};const original=HTMLMediaElement.prototype.play,muted=new WeakMap();
+      const block=media=>{if(!enabled||!(media instanceof HTMLMediaElement))return;if(!muted.has(media))muted.set(media,media.muted);media.muted=true;media.pause();try{carbonvMedia(JSON.stringify({audioEffect:{state:'error',reductionDb:0}}))}catch{}};
+      const update=state=>{enabled=state.enabled;for(const media of document.querySelectorAll('video,audio')){if(enabled)block(media);else if(muted.has(media)){media.muted=muted.get(media);muted.delete(media);}}};
+      for(const event of ['play','playing','loadedmetadata','canplay'])addEventListener(event,e=>block(e.target),true);
+      HTMLMediaElement.prototype.play=function(...args){if(!enabled)return original.apply(this,args);block(this);return Promise.reject(new Error('NoiseLimiter 资源不可用'))};
+      window.__carbonvDynamics={update,status:()=>({enabled,error:true})};update({enabled});
+    })();`;
   }
   return `(() => {
   if(location.protocol!=='https:' || !(location.hostname==='bilibili.com'||location.hostname.endsWith('.bilibili.com')))return;
@@ -65,7 +73,7 @@ export const noiseLimiterBootstrap = (): string => {
       if(!record.attached||ended)return;
       const node=new AudioWorkletNode(context,'carbonv-dynamics',{numberOfInputs:1,numberOfOutputs:1,outputChannelCount:[2],channelCount:2,channelCountMode:'explicit',processorOptions:{module,config}});
       record.node=node;node.port.onmessage=({data})=>{if(!ended&&record.attached){record.last=data;report(data.state,data.reductionDb);}};
-      node.onprocessorerror=()=>{if(!record.attached)return;record.source.disconnect();node.disconnect();record.source.connect(record.fallback);report('fallback');};
+      node.onprocessorerror=()=>{if(!record.attached||record.node!==node)return;record.source.disconnect();node.disconnect();node.port.onmessage=null;node.port.close();record.node=null;record.fallback.disconnect();record.source.connect(record.fallback);record.fallback.connect(context.destination);record.last={state:'fallback',peak:0,reductionDb:0};report('fallback');};
       node.connect(context.destination);record.source.disconnect();record.fallback.disconnect();record.source.connect(node);
     }).catch(()=>report('fallback'));
     return record;
@@ -75,6 +83,9 @@ export const noiseLimiterBootstrap = (): string => {
     for(const record of active){record.fallback.curve=curve();record.node?.port.postMessage({config});}
     if(state.enabled)for(const media of document.querySelectorAll('video,audio'))if(!media.paused){try{attach(media);ctx.resume().catch(()=>{})}catch{media.pause();report('error')}}
   };
+  const suspendIdle=()=>{if(ctx&&[...active].every(record=>record.media.paused||record.media.ended))ctx.suspend().then(()=>{if([...active].every(record=>record.media.paused||record.media.ended))report('idle',0)}).catch(()=>{});};
+  for(const name of ['pause','ended'])document.addEventListener(name,()=>queueMicrotask(suspendIdle),true);
+  document.addEventListener('play',event=>{const media=event.target;if(!(media instanceof HTMLMediaElement)||media.paused)return;try{if(config.enabled)attach(media);if(records.get(media)?.attached)ctx.resume().catch(()=>{})}catch{media.pause();report('error')}},true);
   HTMLMediaElement.prototype.play=function(...args){
     if(!config.enabled)return originalPlay.apply(this,args);
     try{attach(this);return Promise.all([ctx.resume(),originalPlay.apply(this,args)]).then(()=>undefined);}
@@ -83,8 +94,9 @@ export const noiseLimiterBootstrap = (): string => {
   document.addEventListener('loadedmetadata',event=>{if(config.enabled && event.target instanceof HTMLMediaElement){try{attach(event.target)}catch{event.target.pause();report('error')}}},true);
   const observer=new MutationObserver(()=>{
     for(const record of active)if(!record.media.isConnected){record.media.pause();record.source.disconnect();record.node?.port.postMessage({dispose:true});record.node?.disconnect();record.fallback.disconnect();record.node=null;record.attached=false;active.delete(record);}
+    queueMicrotask(suspendIdle);
   });observer.observe(document,{childList:true,subtree:true});
   window.__carbonvDynamics={update,status:()=>({enabled:config.enabled,connected:active.size,context:ctx?.state,latency:ctx?.baseLatency??0,reports:[...active].map(r=>r.last)})};
-  addEventListener('pagehide',()=>{ended=true;observer.disconnect();for(const record of active){record.media.pause();record.node?.port.postMessage({dispose:true});record.source.disconnect();record.node?.disconnect();record.fallback.disconnect();}active.clear();ctx?.close().catch(()=>{});},{once:true});
+  addEventListener('pagehide',()=>{ended=true;report('idle',0);observer.disconnect();for(const record of active){record.media.pause();record.node?.port.postMessage({dispose:true});record.source.disconnect();record.node?.disconnect();record.fallback.disconnect();}active.clear();ctx?.close().catch(()=>{});},{once:true});
  })();`;
 };

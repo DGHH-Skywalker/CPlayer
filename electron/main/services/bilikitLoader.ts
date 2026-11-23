@@ -72,6 +72,9 @@ export class BilikitLoader {
   private songSource = "";
   private registration: Promise<void> = Promise.resolve();
   private contents: WebContents;
+  private registrationFailed = true;
+  private disposed = false;
+  private listening = false;
   version = "unavailable";
   loaded = false;
 
@@ -79,14 +82,39 @@ export class BilikitLoader {
    * 创建本地脚本加载器
    * @param contents - 无 Node 权限的独立网页
    * @param reportMedia - 已验证网页上下文的媒体布尔事件
+   * @param reportSong - 当前网页曲目事件
+   * @param protectionChanged - 主文档保护失效或注册完成后的主进程回调
    */
   constructor(
     contents: WebContents,
     private reportMedia: (playing: boolean) => void,
     private reportSong: (event: unknown) => void = () => {},
+    private protectionChanged: (protectedAudio: boolean) => void = () => {},
   ) {
     this.contents = contents;
+    contents.debugger.on("detach", this.onDetached);
   }
+
+  /** 主文档已注册保护脚本且调试连接仍有效，与 Core 总开关和存活报告无关 */
+  get audioProtected(): boolean {
+    return (
+      !this.disposed &&
+      !this.registrationFailed &&
+      !this.contents.isDestroyed() &&
+      this.contents.debugger.isAttached() &&
+      this.scripts.has("")
+    );
+  }
+
+  /** 调试器丢失后立即通知主进程静音，旧注册标识不能继续作为保护凭据 */
+  private readonly onDetached = (): void => {
+    this.registrationFailed = true;
+    this.loaded = false;
+    this.scripts.clear();
+    this.sessions.clear();
+    this.mediaContexts.clear();
+    if (!this.disposed) this.protectionChanged(false);
+  };
 
   /**
    * 注册主世界脚本并挂接跨进程框架
@@ -106,7 +134,7 @@ export class BilikitLoader {
     song: BilibiliSongPage | null,
   ): Promise<void> {
     const wc = this.contents;
-    if (wc.isDestroyed()) return;
+    if (this.disposed || wc.isDestroyed()) return;
     try {
       if (enabled) {
         const core = readCore();
@@ -118,6 +146,9 @@ export class BilikitLoader {
       this.source += noiseLimiterBootstrap() + this.songSource;
       if (!wc.debugger.isAttached()) {
         wc.debugger.attach("1.3");
+      }
+      if (!this.listening) {
+        this.listening = true;
         wc.debugger.on("message", async (_event, method, params, sessionId) => {
           try {
             if (method === "Target.attachedToTarget") {
@@ -172,17 +203,21 @@ export class BilikitLoader {
         flatten: true,
       });
       this.loaded = false;
+      this.registrationFailed = false;
+      if (!this.disposed) this.protectionChanged(this.audioProtected);
       coreLog.info("B 站提前注入已注册", { enabled, version: this.version });
     } catch (error) {
       this.loaded = false;
-      coreLog.error("B 站提前注入失败，保留原生网页", error);
+      this.registrationFailed = true;
+      if (!this.disposed) this.protectionChanged(false);
+      coreLog.error("B 站提前注入失败，保持音频保护门控", error);
     }
   }
 
   /** 参数变化只更新音频节点及后续文档脚本，不重载当前视频 */
   updateAudioEffects(): Promise<void> {
     const task = this.registration.then(async () => {
-      if (this.contents.isDestroyed()) return;
+      if (this.disposed || this.contents.isDestroyed()) return;
       const source = noiseLimiterBootstrap();
       this.source = this.baseSource + source + this.songSource;
       for (const session of ["", ...this.sessions]) await this.register(session);
@@ -196,8 +231,14 @@ export class BilikitLoader {
             .then((ready) => (ready ? undefined : frame.executeJavaScript(source, true))),
         ),
       );
+      this.registrationFailed = false;
+      if (!this.disposed) this.protectionChanged(this.audioProtected);
     });
-    this.registration = task.catch((error) => coreLog.warn("网页音效更新失败", error));
+    this.registration = task.catch((error) => {
+      this.registrationFailed = true;
+      if (!this.disposed) this.protectionChanged(false);
+      coreLog.warn("网页音效更新失败", error);
+    });
     return task;
   }
 
@@ -215,6 +256,7 @@ export class BilikitLoader {
       sessionId || undefined,
     );
     const old = this.scripts.get(sessionId);
+    this.scripts.delete(sessionId);
     if (old)
       await wc.debugger.sendCommand(
         "Page.removeScriptToEvaluateOnNewDocument",
@@ -246,6 +288,9 @@ export class BilikitLoader {
 
   /** 销毁视图时释放调试器与所有脚本注册 */
   dispose(): void {
+    this.disposed = true;
+    this.registrationFailed = true;
+    this.contents.debugger.removeListener("detach", this.onDetached);
     if (this.contents.debugger.isAttached()) this.contents.debugger.detach();
     this.mediaContexts.clear();
     this.scripts.clear();

@@ -203,3 +203,15 @@ Windows 原生编译、便携版和三模式真实网页结果由本版 GitHub A
 修改后该界面样本的页面时钟标记：bootstrap 282 ms、player-ready 667 ms、app-mounted 773 ms、startup-complete 1635 ms。原生音频模块缺失时相关 IPC 失败，因此不据此声称音乐已在 667 ms 可播放；真实 Windows 包会另外要求原生 DSP 配置成功。
 
 Windows 首屏模块验证使用 CDP `Debugger.scriptParsed` 捕获实际解析的脚本。`file:` 页面的 Resource Timing 可能不列出模块，不能凭空列表判定懒加载通过。
+
+### 发布前故障与并发回归
+
+新增 Rust 原生适配器编译与参数快照测试，覆盖 −30/−12/−3 dBFS 上限、无效参数保留与关闭；与核心合计 7 项通过。首轮 Windows 编译发现的无符号取负问题已修正并由该测试覆盖。
+
+插件生命周期新增 8 项：更新/重装/恢复期间不撤销原有动态保护，加载失败降为基础保护并保留输出上限；明确禁用、卸载、撤权才移除贡献。定位与片尾并发新增主进程及前端终态回归，确保当前曲目的 ended/error/stopped 不被进度过滤吞掉，旧曲目和上课后事件仍被拒绝。
+
+真实 Electron 故障注入：AudioWorklet 的 processorerror 触发后，后备限幅重新连接输出，测得非零峰值 0.1258925，符合 −18 dBFS；资源文件缺失时，HTML 原生 autoplay 和动态 audio 均保持 paused、muted、time=0，显式禁用后可正常播放且不擅自恢复。
+
+Windows 真实 B 站三模式运行 [45149449539](https://github.com/DGHH-Skywalker/CPlayer/actions/runs/45149449539) 全部通过：Core+no-login 为 1920×1080，关闭增强或关闭Core为640×360；三模式 NoiseLimiter 图均 running/active、非零输出不超过 −12 dBFS，失焦继续播放，片尾唯一 ended 并保持暂停。
+
+最终本地故障集成：105 文件 / 733 项 Web 测试、53 项 Node 测试、7 项可移植/原生适配器 Rust 测试、类型与零警告 Lint 通过。补充CDP attach/register/detach失效的主进程静音门控，不将Core关闭当作保护失败。暂停后挂起浏览器音效上下文，恢复播放再运行，避免后台持续处理静音。Windows候选构建 [45201141348](https://github.com/DGHH-Skywalker/CPlayer/actions/runs/45201141348) 的安装包生成及原生音频回归127项通过、4项忽略；其便携版媒体夹具曾在网页body出现前插入节点，已改为等待实际文档就绪，最终Release仍需完整重跑验收。

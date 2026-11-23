@@ -51,7 +51,7 @@
     "docs:build": "vitepress build docs",
     "docs:preview": "vitepress preview docs",
     "prepare": "husky",
-    "test:electron": "node scripts/run-electron-smoke.mjs",
+    "test:electron": "node scripts/run-electron-smoke.mjs && node scripts/run-electron-smoke.mjs --failsafe",
     "test:bilibili-live": "node scripts/run-electron-smoke.mjs --live",
     "build:dynamics": "node scripts/build-dynamics.mjs",
     "test:dynamics": "cargo test --manifest-path native/noise-dsp/Cargo.toml",

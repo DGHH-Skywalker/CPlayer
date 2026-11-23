@@ -1,6 +1,6 @@
 import { sanitizeTimeRanges } from "@shared/bilibiliTimeline";
 import { randomUUID } from "node:crypto";
-import { audioEffectEvents } from "./audioEffects";
+import { audioEffectEvents, effectiveDynamics } from "./audioEffects";
 import { app, session, WebContentsView, clipboard } from "electron";
 import { getMainWindow } from "@main/window";
 import { sendToMain } from "@main/utils/broadcast";
@@ -46,7 +46,26 @@ let songWantsPlay = false;
 let currentSeekId: string | undefined;
 let currentSeekOrder = 0;
 let cutoffMuted = false;
+let audioMuteRequested = true;
 let songButton: BilibiliSongButton | null = null;
+
+/**
+ * 所有解除静音请求均检查主文档保护，CDP 失败不能退回未限制原声
+ * @param muted - 调用方要求的静音状态
+ */
+const applyAudioMute = (muted: boolean): void => {
+  audioMuteRequested = muted;
+  const wc = view?.webContents;
+  if (!wc || wc.isDestroyed()) return;
+  const noProtection = effectiveDynamics().enabled && !loader?.audioProtected;
+  const classLocked =
+    !schoolAllowsPlayback() && (cutoffMuted || store.get("school.bilibili.pauseOnClass"));
+  wc.setAudioMuted(muted || noProtection || classLocked);
+  if (!muted && (noProtection || classLocked)) {
+    coordinator.invalidate();
+    void pauseMedia();
+  }
+};
 
 const coordinator = new MvAudioCoordinator({
   isPlaying: () => getPlayer().getStatus().state === "playing",
@@ -56,7 +75,7 @@ const coordinator = new MvAudioCoordinator({
   version: getPlaybackActivity,
   generation: () => getSchoolScheduler().get().generation,
   allowed: schoolAllowsPlayback,
-  mute: (muted) => view?.webContents.setAudioMuted(muted),
+  mute: applyAudioMute,
 });
 
 /** 读取专用浏览器状态，绝不包含 Cookie 或账号凭据 */
@@ -130,12 +149,14 @@ const reportSong = (input: unknown): void => {
   const active = biliSongTransport.current;
   if (!active || !input || typeof input !== "object") return;
   const event = input as BilibiliSongEvent;
+  const terminal = ["ended", "error", "stopped"].includes(event.state);
   if (
     event.token !== active.token ||
-    (currentSeekId !== undefined && event.seekId !== currentSeekId) ||
+    (!terminal && currentSeekId !== undefined && event.seekId !== currentSeekId) ||
     active.state === "ended" ||
     active.state === "stopped" ||
-    !["playing", "paused", "loading", "ended", "error"].includes(event.state) ||
+    active.state === "error" ||
+    !["playing", "paused", "loading", "ended", "error", "stopped"].includes(event.state) ||
     !Number.isFinite(event.position) ||
     !Number.isFinite(event.duration)
   )
@@ -159,7 +180,7 @@ const reportSong = (input: unknown): void => {
     buffered: sanitizeTimeRanges(event.buffered, Math.max(0, event.duration)),
     seekable: sanitizeTimeRanges(event.seekable, Math.max(0, event.duration)),
   };
-  biliSongTransport.current = next;
+  biliSongTransport.current = event.state === "stopped" ? null : next;
   if (
     event.state === "loading" &&
     event.reason === "metadata" &&
@@ -172,8 +193,9 @@ const reportSong = (input: unknown): void => {
     void controlBilibiliSong("play", active.token).catch((error) =>
       coreLog.warn("哔哩Song 播放器重建后恢复失败", error),
     );
-  if (event.state === "ended" || event.state === "error") {
-    view?.webContents.setAudioMuted(true);
+  // 片尾或进程退出可能早于在途定位执行，终态仍必须收尾并保持静音
+  if (terminal) {
+    applyAudioMute(true);
   }
   sendToMain("bilibili:song", next);
   nowPlaying.onPlayStateChange(event.state === "playing" ? "playing" : "paused");
@@ -239,7 +261,7 @@ export const playBilibiliSong = async (
     autoPlay,
   });
   if (biliSongTransport.current?.token !== token || !schoolAllowsPlayback()) return;
-  view!.webContents.setAudioMuted(false);
+  applyAudioMute(false);
   try {
     await view!.webContents.loadURL(song.bilibili!.url);
   } catch (error) {
@@ -289,7 +311,7 @@ export const controlBilibiliSong = async (
   if (command === "inspect" && seekId !== currentSeekId) return;
   if (command === "stop") {
     currentSeekId = undefined;
-    view?.webContents.setAudioMuted(true);
+    applyAudioMute(true);
     biliSongTransport.current = null;
     sendToMain("bilibili:song", { ...active, state: "stopped" });
   }
@@ -378,6 +400,8 @@ const create = async (): Promise<void> => {
       },
     });
     const wc = view.webContents;
+    audioMuteRequested = true;
+    wc.setAudioMuted(true);
     // 使用标准桌面浏览器标识，保留 Chromium 版本以兼容站点播放器
     wc.setUserAgent(
       wc
@@ -517,6 +541,12 @@ const create = async (): Promise<void> => {
         void reportMedia(playing);
       },
       reportSong,
+      (protectedAudio) => {
+        if (view?.webContents !== wc) return;
+        if (!protectedAudio) coordinator.invalidate();
+        applyAudioMute(audioMuteRequested);
+        publish();
+      },
     );
     const config = store.get("school.bilibili");
     if (!config.retainLogin) await dedicated.clearData();
@@ -537,9 +567,17 @@ const create = async (): Promise<void> => {
  */
 const reportMedia = async (playing: boolean): Promise<void> => {
   mediaPlaying = playing;
+  if (effectiveDynamics().enabled && !loader?.audioProtected) {
+    coordinator.invalidate();
+    applyAudioMute(audioMuteRequested);
+    if (playing) await pauseMedia();
+    mediaPlaying = false;
+    publish();
+    return;
+  }
   if (!schoolAllowsPlayback() && (cutoffMuted || store.get("school.bilibili.pauseOnClass"))) {
     coordinator.invalidate();
-    view?.webContents.setAudioMuted(true);
+    applyAudioMute(audioMuteRequested);
     if (playing) await pauseMedia();
     mediaPlaying = false;
     publish();
@@ -578,7 +616,7 @@ export const onSchoolCutoff = (): void => {
   updateSongButton();
   if (biliSongTransport.current) void controlBilibiliSong("stop", biliSongTransport.current.token);
   if (store.get("school.bilibili.pauseOnClass")) {
-    view?.webContents.setAudioMuted(true);
+    applyAudioMute(true);
     void pauseMedia();
   }
 };
@@ -621,7 +659,7 @@ export const syncBilibiliConfig = async (): Promise<void> => {
   if (!view || !loader) return;
   if (biliSongTransport.current) await controlBilibiliSong("stop", biliSongTransport.current.token);
   coordinator.invalidate();
-  view.webContents.setAudioMuted(config.audioPolicy === "muted");
+  applyAudioMute(config.audioPolicy === "muted");
   await loader.install(config.coreEnabled && !temporaryDisabled, config.noLogin);
   view.webContents.reload();
 };
@@ -763,6 +801,7 @@ export const bilibiliCommand = async (command: string, value?: unknown): Promise
 };
 
 audioEffectEvents.on("changed", () => {
+  applyAudioMute(audioMuteRequested);
   void loader?.updateAudioEffects().catch((error) => coreLog.warn("浏览器音效同步失败", error));
 });
 

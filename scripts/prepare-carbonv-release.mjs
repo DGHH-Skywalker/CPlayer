@@ -68,6 +68,11 @@ export const assembleRelease = (input, output, cwd = process.cwd()) => {
   assert.equal(acceptance.startupLazyLoading, true, "Lazy startup was not verified");
   assert.equal(acceptance.pluginCenter, true, "Plugin center was not verified");
   assert.equal(acceptance.noiseLimiter, true, "NoiseLimiter was not verified");
+  assert.equal(
+    build.dynamics?.wasmSha256,
+    dynamics.wasmSha256,
+    "Built dynamics differs from source",
+  );
   const pluginZip = unique(`NoiseLimiter-${dynamics.version}.cplayer.zip`);
   const names = ["setup", "portable"].map((kind) => `Cplayer-${pkg.version}-x64-${kind}.exe`);
   const binaries = names.map((name) => unique(name));

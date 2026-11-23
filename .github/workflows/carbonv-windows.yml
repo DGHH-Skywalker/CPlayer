@@ -91,7 +91,8 @@ jobs:
           import { readFileSync, writeFileSync, appendFileSync } from 'node:fs';
           const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
           const commit = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
-          writeFileSync('dist/build-provenance.json', JSON.stringify({ version: pkg.version, commit, run: `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}` }, null, 2));
+          const dynamics = JSON.parse(readFileSync("vendor/noiselimiter/manifest.json", "utf8"));
+          writeFileSync('dist/build-provenance.json', JSON.stringify({ version: pkg.version, commit, dynamics, run: `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}` }, null, 2));
           appendFileSync(process.env.GITHUB_OUTPUT, `commit=${commit}\n`);
           JS
       - name: Upload installers, portable app and source provenance
@@ -115,3 +116,4 @@ jobs:
             dist/build-provenance.json
             docs/testing.md
             vendor/bilikit/manifest.json
+            vendor/noiselimiter/manifest.json

@@ -63,7 +63,14 @@ const fixture = () => {
   const commit = execFileSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" }).trim();
   for (const kind of ["setup", "portable"])
     writeFileSync(join(input, `Cplayer-1.4.0-x64-${kind}.exe`), "MZfixture");
-  writeFileSync(join(input, "build-provenance.json"), JSON.stringify({ version: "1.4.0", commit }));
+  writeFileSync(
+    join(input, "build-provenance.json"),
+    JSON.stringify({
+      version: "1.4.0",
+      commit,
+      dynamics: { wasmSha256: createHash("sha256").update("fixture wasm").digest("hex") },
+    }),
+  );
   writeFileSync(
     join(input, "acceptance-result.json"),
     JSON.stringify({

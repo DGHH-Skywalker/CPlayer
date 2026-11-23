@@ -3,7 +3,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   sendHostResult: vi.fn(),
   callNetease: vi.fn(),
+  configGet: vi.fn(),
+  configSet: vi.fn(),
+  applyConfig: vi.fn(),
 }));
+vi.mock("@main/store", () => ({ store: { get: mocks.configGet, set: mocks.configSet } }));
+vi.mock("@main/ipc/config", () => ({ applyConfigChange: mocks.applyConfig }));
 vi.mock("electron", () => ({ Notification: vi.fn() }));
 vi.mock("./host-process", () => ({ pluginHost: mocks }));
 vi.mock("./net", () => ({ hostRequest: vi.fn() }));
@@ -38,5 +43,35 @@ describe("插件调用现有平台接口", () => {
       ok: true,
       ...result,
     });
+  });
+});
+
+describe("API 6 配置权限", () => {
+  it("通过既有配置副作用立即应用有效参数", async () => {
+    await dispatchHostCall("plugin", () => ["settings"], "fade", "settings.set", [
+      "player.fadeDuration",
+      250,
+    ]);
+    expect(mocks.configSet).toHaveBeenCalledWith("player.fadeDuration", 250);
+    expect(mocks.applyConfig).toHaveBeenCalledWith("player.fadeDuration", 250);
+  });
+  it("配置权限不能改校园闸门，也不能被其他权限替代", async () => {
+    mocks.configSet.mockClear();
+    await dispatchHostCall("plugin", () => ["settings"], "school", "settings.set", [
+      "school.scheduleEnabled",
+      false,
+    ]);
+    await dispatchHostCall("plugin", () => ["control"], "denied", "settings.set", [
+      "player.autoPlay",
+      true,
+    ]);
+    expect(mocks.configSet).not.toHaveBeenCalled();
+    expect(mocks.sendHostResult).toHaveBeenCalledWith(
+      "plugin",
+      "denied",
+      false,
+      undefined,
+      expect.objectContaining({ code: expect.any(String) }),
+    );
   });
 });

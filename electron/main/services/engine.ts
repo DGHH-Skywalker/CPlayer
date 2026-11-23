@@ -136,6 +136,11 @@ export const resetPlayer = (): void => {
   playerInstance = null;
 };
 
+/** 同步渐变时长，不因配置写入额外创建音频实例 */
+export const setFadeDuration = (durationMs: number): void => {
+  playerInstance?.setFadeDuration(durationMs);
+};
+
 /** 同步音量均衡设置到播放器 */
 export const setNormalizationEnabled = (enabled: boolean): void => {
   if (playerInstance) {

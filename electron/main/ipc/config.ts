@@ -12,6 +12,7 @@ import {
 } from "@main/services/media";
 import { reloadConfig as reloadLastfmConfig } from "@main/services/lastfm";
 import {
+  setFadeDuration,
   setNormalizationEnabled,
   setEqualizerEnabled,
   setEqualizerBands,
@@ -67,6 +68,10 @@ export const applyConfigChange = (keyPath: string, value: unknown): void => {
     case "lastfm.nowPlaying":
     case "lastfm.loveSync":
       reloadLastfmConfig();
+      break;
+    case "player.fadeEnabled":
+    case "player.fadeDuration":
+      setFadeDuration(store.get("player.fadeEnabled") ? store.get("player.fadeDuration") : 0);
       break;
     case "player.loudnessNormalization":
       setNormalizationEnabled(value as boolean);

@@ -394,7 +394,13 @@ class PluginRegistry extends EventEmitter {
 
     // 放入运行时
     const existing = this.runtimes.get(manifest.id);
-    if (existing) await this.stop(existing);
+    if (existing)
+      await this.stop(
+        existing,
+        existing.enabled &&
+          manifest.grant.includes("dsp") &&
+          this.getGrantedPermissions(manifest.id).includes("dsp"),
+      );
     const rt: PluginRuntime = {
       manifest,
       enabled: true,
@@ -512,7 +518,12 @@ class PluginRegistry extends EventEmitter {
 
     // enabled / 用户设置 / 每插件存储均按 id 关联，id 不变即天然保留
     rt.updateInfo = null;
-    await this.stop(rt);
+    await this.stop(
+      rt,
+      rt.enabled &&
+        manifest.grant.includes("dsp") &&
+        this.getGrantedPermissions(id).includes("dsp"),
+    );
     rt.manifest = manifest;
     rt.source = source;
     rt.events = [];
@@ -762,10 +773,11 @@ class PluginRegistry extends EventEmitter {
   /**
    * 取消插件加载与在途调用并卸载沙箱
    * @param rt - 待停止的插件运行时
+   * @param preserveDynamics - 保留重载前的保护，直到新脚本成功注册或进入保守降级
    */
-  private async stop(rt: PluginRuntime): Promise<void> {
+  private async stop(rt: PluginRuntime, preserveDynamics = false): Promise<void> {
     releasePluginFiles(rt.manifest.id);
-    removeDynamics(rt.manifest.id);
+    if (!preserveDynamics) removeDynamics(rt.manifest.id);
     rt.hostSession?.abort();
     rt.loading = false;
     // 软卸载：dispose 该插件的 vm 上下文，host 进程与其它插件不受扰

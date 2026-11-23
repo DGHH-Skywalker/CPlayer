@@ -107,6 +107,21 @@ describe("哔哩Song 定位握手", () => {
     expect(bilibiliTimeline.value.pendingTarget).toBe(null);
     expect(mocks.toast).toHaveBeenCalledOnce();
   });
+  it.each(["ended", "error", "stopped"] as const)(
+    "当前曲目 %s 即使带旧定位标识也立即收尾，不能留下超时或旧进度",
+    async (state) => {
+      await seekBilibili("owner", 60000, () => true);
+      expect(
+        acceptBilibiliPosition(
+          event({ state, seekId: "before-seek", seekOrder: 0, position: 120000 }),
+        ),
+      ).toBe(true);
+      expect(bilibiliTimeline.value.pendingTarget).toBe(null);
+      await vi.advanceTimersByTimeAsync(10000);
+      expect(mocks.control).toHaveBeenCalledOnce();
+      expect(mocks.toast).not.toHaveBeenCalled();
+    },
+  );
   it("未取得时长和非法位置均不提交请求", async () => {
     await seekBilibili("owner", NaN, () => true);
     mocks.status.duration = 0;

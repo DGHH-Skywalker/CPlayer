@@ -6,9 +6,16 @@ const require = createRequire(import.meta.url);
 const { build } = createRequire(require.resolve("tsx/package.json"))("esbuild");
 const output = resolve(".electron-browser-test.cjs");
 const live = process.argv.includes("--live");
+const failsafe = process.argv.includes("--failsafe");
 try {
   await build({
-    entryPoints: [live ? "scripts/test-bilibili-live.ts" : "scripts/test-bilibili-electron.ts"],
+    entryPoints: [
+      failsafe
+        ? "scripts/test-noiselimiter-failsafe.ts"
+        : live
+          ? "scripts/test-bilibili-live.ts"
+          : "scripts/test-bilibili-electron.ts",
+    ],
     outfile: output,
     bundle: true,
     platform: "node",
