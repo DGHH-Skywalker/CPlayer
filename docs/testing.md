@@ -251,3 +251,9 @@ B 站测试结果更新了前文早期“未输出解码帧”的记录：当前
 新增验证覆盖鼓点整段能量及第一个起音、0/25/50/75/100 强度递增、立体声比例、调至最高强度立即遵守 −36 dBFS、旧模式不能绕过动态路径、唯一滑块界面、固定旧脚本升级、Windows 换行、用户改写保留、基础参数迁移及禁用/卸载状态保留。
 
 真实 Electron 44.10.1 的 AudioWorklet/WASM 在 100 强度下输出非零峰值 0.01584893（−36 dBFS），处理器故障后的保守输出同样不超过该值；上下文暂停/恢复、资源失效原生 autoplay 拦截、明确关闭后恢复、定位和上课闸门回归通过。可控鼓点相对 v1.4.0 的 RMS 对比见 [NoiseLimiter](noiselimiter.md)。这些结果不替代实体扬声器主观试听、真实睡眠/唤醒或账号交互。
+
+补充实测：2026-11-26 真实匿名 B 站页面在 **100 强度**、Core + no-login 下解码 1920×1080，AudioWorklet/WASM 图 running/active，非零峰值 0.01584893，报告衰减约 54.32 dB；失焦继续播放、片尾一次 ended 并暂停。Windows 三模式 [45808177952](https://github.com/DGHH-Skywalker/CPlayer/actions/runs/45808177952) 均通过（该矩阵使用默认 50 强度）。
+
+相同 Electron 44.10.1 窗口/Core/悬浮按钮与循环正弦媒体、默认 50 强度，启动 60 秒采样，总工作集：v1.4.0 为 596648 KiB，新版为 598068 KiB，增加 1420 KiB（约 1.4 MiB）；两次均确认媒体未暂停、未结束、音效图 running。此为 Linux 受控活动 DSP 样本，不代表 Windows 全应用或最大媒体数量占用；首次被其他测试窗口遮挡而暂停的样本未用于比较。
+
+v1.4.1 最终发行：[45808171867](https://github.com/DGHH-Skywalker/CPlayer/actions/runs/45808171867) 全成功，源码 `68c6631117fd5c6d05da6da4d4baf19006de0590`。正式 Windows 原生音频回归 127 项通过、4 项忽略（3 项需本机 FFmpeg 生成样本、1 项需独占端点），便携版最高动态强度/ZIP 安装恢复/底栏/CLASS 闸门通过。8 附件和两个大陆代理 EXE 均完整下载、摘要核验通过，位置 `dist/release-v1.4.1/`，校验报告 `verification-result.json` 与 `mirror-verification.json`。Windows runner 没有音频端点，仍记录 `nativeAudio.verified=false`。实体设备试听和睡眠不因 CI 成功而视为已验证。

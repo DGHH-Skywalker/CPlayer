@@ -22,7 +22,7 @@ B 站普通浏览和哔哩Song 使用同一份 Rust 算法编译出的本地 WAS
 
 包络、软拐点增益与限制算法参考并改写自 CamillaDSP，固定提交 `05e9cfcdf43c0dfe078ed3feb8af4c8bd701fd74`。上游提供 GPL-3.0 / MPL-2.0 双重许可，此处改写文件选用 MPL-2.0；上游原文件和两份许可证保留在 `vendor/noiselimiter/camilladsp`。整体应用继续使用 AGPL-3.0。
 
-`native/noise-dsp` 是无第三方依赖的可移植 crate，`pnpm test:dynamics` 测试，`pnpm build:dynamics` 在规范 Linux / WSL 环境编译 WASM、写入源码与产物 SHA-256 清单。应用构建使用 `pnpm verify:dynamics` 验证固定资源和规范源码，不在不同宿主系统上静默改写资源；正式 Release 的 Linux job 会重建并核对产物。`pnpm pack:noiselimiter` 生成可导入 ZIP。应用只执行本地固定资源，不在线下载 DSP。
+`native/noise-dsp` 是无第三方依赖的可移植 crate，`pnpm test:dynamics` 测试，`pnpm build:dynamics` 在规范 Linux / WSL 环境编译 WASM、写入源码与产物 SHA-256 清单。应用构建使用 `pnpm verify:dynamics` 验证固定资源和规范源码，不在不同宿主系统上静默改写资源；正式 Release 的 Linux job 会重建并核对产物。`pnpm pack:noiselimiter` 生成可导入 ZIP。应用只执行本地固定资源，不在线下载 DSP。新的压制算法随 Cplayer v1.4.1 宿主分发，1.1.0 ZIP 是插件入口，不能替代应用升级。
 
 ## 验证范围
 
