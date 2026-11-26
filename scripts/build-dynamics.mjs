@@ -37,7 +37,7 @@ writeFileSync(
   JSON.stringify(
     {
       id: "carbonv.noise-limiter",
-      version: "1.0.0",
+      version: "1.1.0",
       entry: "plugin.js",
       hostApi: 6,
       sourceSha256: dynamicsSourceHash(),

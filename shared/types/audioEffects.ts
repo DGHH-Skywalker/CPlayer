@@ -1,6 +1,7 @@
 /** 宿主实时动态处理的可移植参数 */
 export interface DynamicsEffect {
   kind: "dynamics";
+  /** basic 仅兼容旧 API 声明，宿主统一转换为动态压制 */
   mode: "basic" | "dynamic";
   strength: number;
   ceilingDb: number;
@@ -38,5 +39,13 @@ export const validateDynamics = (input: unknown): DynamicsEffect => {
     c.ceilingDb > -3
   )
     throw new Error("无效音效参数");
-  return { kind: "dynamics", mode: c.mode, strength: c.strength, ceilingDb: c.ceilingDb };
+  return { kind: "dynamics", mode: "dynamic", strength: c.strength, ceilingDb: c.ceilingDb };
 };
+
+/**
+ * 浏览器初始化和故障保护也遵守最高强度的保守输出上限
+ * @param config - 已校验的动态参数
+ * @returns 不高于用户上限的安全幅度分贝
+ */
+export const dynamicsSafetyCeilingDb = (config: DynamicsEffect): number =>
+  Math.min(config.ceilingDb, -36 * (config.strength / 100) ** 3);

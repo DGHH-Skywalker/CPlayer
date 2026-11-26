@@ -31,6 +31,7 @@ vi.mock("./fileAccess", () => ({ releasePluginFiles: vi.fn() }));
 vi.mock("./builtin", () => ({
   NOISE_LIMITER_ID: "carbonv.noise-limiter",
   builtinNoiseSource: () => state.source,
+  upgradeBuiltinNoiseSource: vi.fn(() => undefined),
 }));
 vi.mock("./bundle", () => ({ readPluginBundle: vi.fn(), installBundleAssets: vi.fn() }));
 vi.mock("./host", () => ({ dispatchHostCall: vi.fn() }));
@@ -43,6 +44,8 @@ vi.mock("./storage", () => ({
 vi.mock("./host-process", () => ({
   pluginHost: {
     loadPlugin: state.loadPlugin,
+    setOnHostLost: vi.fn(),
+    setOnHostStable: vi.fn(),
     isReady: () => false,
     unloadPlugin: vi.fn(),
     shutdown: vi.fn(),
@@ -56,6 +59,7 @@ const source = (grant = "ui,dsp"): string =>
 beforeEach(async () => {
   vi.resetModules();
   vi.clearAllMocks();
+  vi.mocked((await import("./builtin")).upgradeBuiltinNoiseSource).mockReset();
   state.directory = await fs.mkdtemp(path.join(os.tmpdir(), "carbonv-registry-dsp-"));
   state.config = new Map([
     ["plugins.enabled", {}],
@@ -121,14 +125,14 @@ describe("插件重载期间持续保留音频保护", () => {
     },
   );
 
-  it("重载失败降为基础保护，保留最后有效上限", async () => {
+  it("重载失败保留动态保护，保留最后有效上限", async () => {
     const { pluginRegistry, effects } = await prepare();
     state.loadPlugin.mockRejectedValueOnce(new Error("new plugin failed"));
     await pluginRegistry.applyUpdateFromSource(ID, source());
     expect(pluginRegistry.getRuntime(ID)?.status.state).toBe("error");
     expect(effects.effectiveDynamics()).toEqual({
       enabled: true,
-      config: { kind: "dynamics", mode: "basic", strength: 50, ceilingDb: -18 },
+      config: { kind: "dynamics", mode: "dynamic", strength: 50, ceilingDb: -18 },
     });
     expect(state.native.mock.calls.every(([enabled]) => enabled === true)).toBe(true);
   });
@@ -146,5 +150,59 @@ describe("插件重载期间持续保留音频保护", () => {
     else await pluginRegistry.setPermission(ID, "dsp", false);
     expect(effects.effectiveDynamics().enabled).toBe(false);
     expect(state.native.mock.calls.some(([enabled]) => enabled === false)).toBe(true);
+  });
+});
+
+describe("已安装内置插件的本地升级", () => {
+  it.each([true, false])("升级保留启用状态 %s 并迁移旧基础强度", async (enabled) => {
+    const { loadScript } = await import("./loader");
+    const legacy = source();
+    state.source = legacy.replace("@version 1.0.0", "@version 1.1.0");
+    const builtin = await import("./builtin");
+    vi.mocked(builtin.upgradeBuiltinNoiseSource).mockImplementation((text) =>
+      text === legacy ? state.source : undefined,
+    );
+    const { manifest } = loadScript(legacy, false);
+    manifest.fileName = `${ID}.js`;
+    await fs.mkdir(path.join(state.directory, "scripts"));
+    await fs.writeFile(path.join(state.directory, "scripts", manifest.fileName), legacy);
+    await fs.writeFile(
+      path.join(state.directory, "manifest.json"),
+      JSON.stringify({ version: 1, seeded: [ID], plugins: { [ID]: manifest } }),
+    );
+    state.config.set("plugins.enabled", { [ID]: enabled });
+    state.config.set("plugins.perPlugin", {
+      [ID]: { mode: "basic", basicStrength: 90, dynamicStrength: 30, ceilingDb: -21 },
+      other: { value: 7 },
+    });
+    const { pluginRegistry } = await import("./registry");
+    const effects = await import("@main/services/audioEffects");
+    pluginRegistry.init();
+    expect(pluginRegistry.getRuntime(ID)?.manifest.version).toBe("1.1.0");
+    expect(pluginRegistry.getRuntime(ID)?.enabled).toBe(enabled);
+    expect(state.config.get("plugins.perPlugin")).toEqual({
+      [ID]: { dynamicStrength: 90, ceilingDb: -21 },
+      other: { value: 7 },
+    });
+    expect(effects.effectiveDynamics().enabled).toBe(enabled);
+    if (enabled)
+      expect(effects.effectiveDynamics().config).toEqual({
+        kind: "dynamics",
+        mode: "dynamic",
+        strength: 90,
+        ceilingDb: -21,
+      });
+    expect(
+      await fs.readFile(path.join(state.directory, "scripts", manifest.fileName), "utf8"),
+    ).toBe(state.source);
+  });
+  it("卸载墓碑保留，不在下次启动重装", async () => {
+    await fs.writeFile(
+      path.join(state.directory, "manifest.json"),
+      JSON.stringify({ version: 1, seeded: [ID], plugins: {} }),
+    );
+    const { pluginRegistry } = await import("./registry");
+    pluginRegistry.init();
+    expect(pluginRegistry.getRuntime(ID)).toBeUndefined();
   });
 });

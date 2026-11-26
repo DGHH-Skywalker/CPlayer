@@ -1,6 +1,6 @@
 import { sanitizeRegistration } from "./registration";
 import { releasePluginFiles } from "./fileAccess";
-import { builtinNoiseSource, NOISE_LIMITER_ID } from "./builtin";
+import { builtinNoiseSource, upgradeBuiltinNoiseSource, NOISE_LIMITER_ID } from "./builtin";
 import { readPluginBundle, installBundleAssets } from "./bundle";
 import { registerDynamics, removeDynamics, degradeDynamics } from "@main/services/audioEffects";
 import { CUSTOM_BUILD } from "@shared/constants/customBuild";
@@ -162,7 +162,7 @@ class PluginRegistry extends EventEmitter {
   private hostRestartAttempts = 0;
   private hostRestartTimer: NodeJS.Timeout | null = null;
 
-  /** 应用启动时调用 */
+  /** 启动时恢复插件并升级已识别的内置脚本，保留卸载、授权及自定义代码 */
   init(): void {
     ensureDirs();
     pluginHost.setOnHostLost(() => this.handleHostLost());
@@ -182,6 +182,7 @@ class PluginRegistry extends EventEmitter {
     }
     const enabledMap = store.get("plugins.enabled") as Record<string, boolean>;
 
+    let upgradedBuiltin = false;
     // 首先加载 stored manifest
     for (const [id, storedManifest] of Object.entries(stored.plugins)) {
       let manifest = storedManifest;
@@ -189,6 +190,12 @@ class PluginRegistry extends EventEmitter {
       let source = "";
       try {
         source = fs.readFileSync(scriptPath, "utf-8");
+        const bundled = id === NOISE_LIMITER_ID ? upgradeBuiltinNoiseSource(source) : undefined;
+        if (bundled) {
+          atomicWriteSync(scriptPath, bundled);
+          source = bundled;
+          upgradedBuiltin = true;
+        }
         // 重新解压（防止脚本外部被替换为 gz_）
         const fresh = loadScript(source, false, manifest.fileName);
         source = fresh.source;
@@ -202,6 +209,7 @@ class PluginRegistry extends EventEmitter {
         coreLog.warn(`[plugin] failed to read ${manifest.fileName}:`, err);
         continue;
       }
+      if (upgradedBuiltin && id === NOISE_LIMITER_ID) stored.plugins[id] = manifest;
       const enabled = enabledMap[id] ?? true;
       this.runtimes.set(id, {
         manifest,
@@ -218,6 +226,8 @@ class PluginRegistry extends EventEmitter {
       });
     }
 
+    if (upgradedBuiltin) writeStored(stored);
+
     const savedSettings = store.get("plugins.perPlugin");
     const settingsById = { ...savedSettings };
     let settingsChanged = false;
@@ -233,16 +243,30 @@ class PluginRegistry extends EventEmitter {
     if (settingsChanged) store.set("plugins.perPlugin", settingsById);
 
     const noise = this.runtimes.get(NOISE_LIMITER_ID);
+    let values = this.settingsOf(NOISE_LIMITER_ID);
+    if (noise?.source === builtinNoiseSource() && ("mode" in values || "basicStrength" in values)) {
+      const migrated = { ...values };
+      if (
+        values.mode === "basic" &&
+        typeof values.basicStrength === "number" &&
+        Number.isFinite(values.basicStrength)
+      )
+        migrated.dynamicStrength = Math.min(100, Math.max(0, values.basicStrength));
+      delete migrated.mode;
+      delete migrated.basicStrength;
+      store.set("plugins.perPlugin", {
+        ...store.get("plugins.perPlugin"),
+        [NOISE_LIMITER_ID]: migrated,
+      });
+      values = migrated;
+    }
     if (noise?.enabled && this.getGrantedPermissions(NOISE_LIMITER_ID).includes("dsp")) {
-      const values = this.settingsOf(NOISE_LIMITER_ID);
-      const mode = values.mode === "basic" ? "basic" : "dynamic";
       registerDynamics(NOISE_LIMITER_ID, {
         kind: "dynamics",
-        mode,
+        mode: "dynamic",
         strength:
-          typeof values[mode + "Strength"] === "number" &&
-          Number.isFinite(values[mode + "Strength"])
-            ? Math.min(100, Math.max(0, values[mode + "Strength"] as number))
+          typeof values.dynamicStrength === "number" && Number.isFinite(values.dynamicStrength)
+            ? Math.min(100, Math.max(0, values.dynamicStrength))
             : 50,
         ceilingDb:
           typeof values.ceilingDb === "number" && Number.isFinite(values.ceilingDb)

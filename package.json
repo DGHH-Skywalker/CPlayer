@@ -2,7 +2,7 @@
   "name": "carbonv_player",
   "productName": "Cplayer",
   "desktopName": "app.carbonv.player",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "CarbonVPlayer 校园课间点歌与 B 站 MV 桌面播放器",
   "type": "module",
   "packageManager": "pnpm@12.15.0",

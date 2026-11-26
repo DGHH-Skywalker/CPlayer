@@ -29,10 +29,10 @@ describe("插件音效生命周期", () => {
     expect(() => registerDynamics("one", { ...DEFAULT_DYNAMICS, strength: NaN })).toThrow();
     expect(effectiveDynamics().config).toEqual(DEFAULT_DYNAMICS);
   });
-  it("错误降为基础保护，显式卸载才取消效果", () => {
+  it("错误保留动态保护，显式卸载才取消效果", () => {
     registerDynamics("one", DEFAULT_DYNAMICS);
     degradeDynamics("one");
-    expect(effectiveDynamics().config.mode).toBe("basic");
+    expect(effectiveDynamics().config.mode).toBe("dynamic");
     expect(effectiveDynamics().config.ceilingDb).toBe(-12);
     removeDynamics("one");
     expect(effectiveDynamics().enabled).toBe(false);

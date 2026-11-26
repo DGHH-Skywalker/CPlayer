@@ -1,9 +1,9 @@
 {
   "id": "carbonv.noise-limiter",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "entry": "plugin.js",
   "hostApi": 6,
-  "sourceSha256": "830773c0b7f05b3aad42a316575744da499de74d1941559032356f725d335481",
+  "sourceSha256": "c5847556d47efb6c6be04c61f890d8f3a7e2243ec025f2098a33c6934ccd31fa",
   "buildPlatform": "linux",
-  "wasmSha256": "1c26cef14f401a2e37d0de20d03298b00d5604b6b4dff409219a5a4d19363935"
+  "wasmSha256": "c7e01b9925b7bcc0127bf8e969bcd6d54230a1a1615d70cefe46e40f19b51cde"
 }

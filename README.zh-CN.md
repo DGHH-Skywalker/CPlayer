@@ -8,11 +8,11 @@
 
 在 [GitHub Releases](https://github.com/DGHH-Skywalker/CPlayer/releases/latest) 下载 Windows x64 安装包（setup）或单文件便携版（portable）。每次发布均附源码、构建来源和 `SHA256SUMS.txt`。中国大陆镜像地址列在对应 Release 中；镜像为第三方下载代理，请使用同一版本的校验值核对文件。
 
-当前版本：[Cplayer v1.4.0](docs/releases/v1.4.0.md)，含 Windows x64 安装包、便携版及已完整下载核验的大陆代理链接。
+当前版本：[Cplayer v1.4.1](docs/releases/v1.4.1.md)，含 Windows x64 安装包、便携版及已完整下载核验的大陆代理链接。
 
 ## 主要功能
 
-- **插件中心 / NoiseLimiter**：设置空白处 3 秒内按 5 次 Enter；默认动态限制，覆盖音乐和 B 站音频，支持 JS/ZIP 插件安装与权限管理
+- **插件中心 / NoiseLimiter**：设置空白处 3 秒内按 5 次 Enter；唯一动态压制，最高强度加强鼓点抑制，覆盖音乐和 B 站音频，支持 JS/ZIP 插件安装与权限管理
 - **哔哩Song 定位**：拖动预览、松手定位、缓冲显示与暂停状态保留
 
 - 普通音乐模式：本地音乐、流媒体、歌词、歌单与播放队列
@@ -52,7 +52,7 @@ pnpm build:win --x64 --publish never
 
 遵循 [AGPL-3.0](LICENSE)，原作者和贡献者保留各自代码版权，来源见 [NOTICE](NOTICE.md)。Core 保留 [MIT 许可](vendor/bilikit/LICENSE) 及 [品牌资产条款](vendor/bilikit/BRAND-ASSETS.md)。平台商标、音乐与视频内容归相应权利人所有。
 
-[插件中心与 SDK](docs/plugins/center.md) · [NoiseLimiter](docs/noiselimiter.md) · [v1.4.0](docs/releases/v1.4.0.md)
+[插件中心与 SDK](docs/plugins/center.md) · [NoiseLimiter](docs/noiselimiter.md) · [v1.4.1](docs/releases/v1.4.1.md)
 
 [渐进启动与按需加载](docs/startup-loading.md)：先准备播放与歌词，优先分发历史歌曲恢复，设置和非核心弹窗按点击加载。
 

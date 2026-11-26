@@ -4,6 +4,7 @@ import { coreLog } from "@main/utils/logger";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { effectiveDynamics } from "./audioEffects";
+import { dynamicsSafetyCeilingDb } from "@shared/types/audioEffects";
 let resources: { wasm: string; processor: string } | undefined;
 /** 固定资源按应用版本加载一次，不依赖 Core 或网络 */
 const loadResources = (): NonNullable<typeof resources> => {
@@ -49,7 +50,8 @@ export const noiseLimiterBootstrap = (): string => {
   const active=new Set(),records=new WeakMap();
   const originalPlay=HTMLMediaElement.prototype.play;
   const report=(state,reductionDb=0)=>{try{carbonvMedia(JSON.stringify({audioEffect:{state,reductionDb}}))}catch{}};
-  const curve=()=>{if(!config.enabled)return null;const c=10**(config.config.ceilingDb/20),v=new Float32Array(65537);for(let i=0;i<v.length;i++)v[i]=Math.max(-c,Math.min(c,i*2/(v.length-1)-1));return v;};
+  const safetyCeiling=${dynamicsSafetyCeilingDb.toString()};
+  const curve=()=>{if(!config.enabled)return null;const c=10**(safetyCeiling(config.config)/20),v=new Float32Array(65537);for(let i=0;i<v.length;i++)v[i]=Math.max(-c,Math.min(c,i*2/(v.length-1)-1));return v;};
   const ready=()=>{
     if(!ctx){ctx=new AudioContext({latencyHint:'interactive'});
       const source=${JSON.stringify(r.processor)};

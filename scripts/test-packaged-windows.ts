@@ -313,28 +313,27 @@ cplayer.settings.get('player.autoPlay').then(v=>cplayer.settings.set('player.aut
   assert.equal(initialNoise.config.strength, 50);
   assert.equal(initialNoise.config.ceilingDb, -12);
   await evaluate(client, `window.api.plugins.list('${noiseId}')`);
-  await evaluate(client, `window.api.plugins.setSetting('${noiseId}','mode','basic')`);
-  await evaluate(client, `window.api.plugins.setSetting('${noiseId}','basicStrength',75)`);
+  await evaluate(client, `window.api.plugins.setSetting('${noiseId}','dynamicStrength',100)`);
   await delay(150);
-  const basic = await evaluate<{ config: { mode: string; strength: number } }>(
+  const maximum = await evaluate<{ config: { mode: string; strength: number } }>(
     client,
     "window.api.plugins.effectsState()",
   );
-  assert.equal(basic.config.mode, "basic");
-  assert.equal(basic.config.strength, 75);
+  assert.equal(maximum.config.mode, "dynamic");
+  assert.equal(maximum.config.strength, 100);
   await evaluate(client, `window.api.plugins.uninstall('${noiseId}')`);
   assert.equal(
     await evaluate(client, "window.api.plugins.effectsState().then(s=>s.enabled)"),
     false,
   );
-  const zipPath = resolve("dist/NoiseLimiter-1.0.0.cplayer.zip");
+  const noiseManifest = JSON.parse(await readFile("vendor/noiselimiter/manifest.json", "utf8"));
+  const zipPath = resolve(`dist/NoiseLimiter-${noiseManifest.version}.cplayer.zip`);
   const installedNoise = await evaluate<{ ok: boolean; error?: string }>(
     client,
     `window.api.plugins.install(${JSON.stringify(zipPath)})`,
   );
   assert.equal(installedNoise.ok, true, installedNoise.error);
   await evaluate(client, `window.api.plugins.list('${noiseId}')`);
-  await evaluate(client, `window.api.plugins.setSetting('${noiseId}','mode','dynamic')`);
   await evaluate(client, `window.api.plugins.setEnabled('${noiseId}',false)`);
   assert.equal(
     await evaluate(client, "window.api.plugins.effectsState().then(s=>s.enabled)"),
@@ -353,7 +352,7 @@ cplayer.settings.get('player.autoPlay').then(v=>cplayer.settings.set('player.aut
       apiLevel: 6,
       fiveEnterUnlock: true,
       defaultNoise: initialNoise,
-      basic,
+      maximum,
       zipInstall: true,
       uninstall: true,
       restore: true,

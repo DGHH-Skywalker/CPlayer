@@ -41,7 +41,7 @@ class CarbonVDynamics extends AudioWorkletProcessor {
       this.wasm.noise_configure(
         this.handle,
         Number(c.enabled),
-        Number(c.config.mode === "dynamic"),
+        1,
         c.config.strength,
         c.config.ceilingDb,
       );
@@ -67,7 +67,10 @@ class CarbonVDynamics extends AudioWorkletProcessor {
       }
     }
     if (!this.wasm) {
-      const ceiling = 10 ** (this.config.config.ceilingDb / 20);
+      const ceiling =
+        10 **
+        (Math.min(this.config.config.ceilingDb, -36 * (this.config.config.strength / 100) ** 3) /
+          20);
       for (let i = 0; i < count; i++) {
         let peak = 0;
         for (let ch = 0; ch < output.length; ch++)

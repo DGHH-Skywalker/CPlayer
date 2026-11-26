@@ -17,7 +17,7 @@ export const effectiveDynamics = (): { enabled: boolean; config: DynamicsEffect 
     config: values.length
       ? {
           kind: "dynamics",
-          mode: values.some((v) => v.mode === "dynamic") ? "dynamic" : "basic",
+          mode: "dynamic",
           strength: Math.max(...values.map((v) => v.strength)),
           ceilingDb: Math.min(...values.map((v) => v.ceilingDb)),
         }
@@ -65,13 +65,13 @@ export const removeDynamics = (owner: string): void => {
   if (effects.delete(owner)) changed();
 };
 /**
- * 插件失效时保留输出上限并降为基础压缩，不能突然恢复原声
+ * 插件失效时保留动态压制与输出上限，不能突然恢复原声
  * @param owner - 失效插件
  */
 export const degradeDynamics = (owner: string): void => {
   const config = effects.get(owner);
   if (config) {
-    effects.set(owner, { ...config, mode: "basic", strength: Math.max(50, config.strength) });
+    effects.set(owner, { ...config, mode: "dynamic", strength: Math.max(50, config.strength) });
     changed();
   }
 };

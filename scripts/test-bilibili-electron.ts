@@ -403,6 +403,18 @@ const run = async (): Promise<void> => {
     JSON.stringify(stricter),
   );
   assert.equal(wc.getURL(), urlBefore);
+  registerDynamics("fixture", { ...DEFAULT_DYNAMICS, strength: 100, ceilingDb: -18 });
+  await loader.updateAudioEffects();
+  await new Promise((done) => setTimeout(done, 600));
+  const maximum = await wc.executeJavaScript("window.__carbonvDynamics.status()");
+  assert.ok(
+    maximum.reports.some(
+      (r) => r?.state === "active" && r.peak > 0 && r.peak <= 10 ** (-36 / 20) + 1e-5,
+    ),
+    JSON.stringify(maximum),
+  );
+  assert.equal(wc.getURL(), urlBefore);
+  console.log("最高动态强度真实 WASM 安全输出验证通过", maximum);
   await wc.executeJavaScript("window.testWorklet.onprocessorerror()");
   await new Promise((done) => setTimeout(done, 500));
   const fallback = await wc.executeJavaScript(
@@ -410,7 +422,7 @@ const run = async (): Promise<void> => {
   );
   assert.equal(fallback.connections, 2, "处理器异常后没有恢复输出连接");
   assert.ok(
-    fallback.peak > 0.01 && fallback.peak <= 10 ** (-18 / 20) + 1e-4,
+    fallback.peak > 0.00001 && fallback.peak <= 10 ** (-36 / 20) + 1e-4,
     JSON.stringify(fallback),
   );
   assert.equal(fallback.paused, false);

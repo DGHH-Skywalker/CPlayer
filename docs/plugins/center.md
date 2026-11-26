@@ -37,6 +37,6 @@ cplayer.ui.openSettings("general");
 
 ## NoiseLimiter 包
 
-应用首次运行会安装并默认启用 `carbonv.noise-limiter`。它是可卸载的真实插件，使用 `ui,dsp`，不获取网络或文件权限。卸载后不会在下次启动自动重装，可主动「恢复 NoiseLimiter」，也可安装 Release 附带的 `NoiseLimiter-1.0.0.cplayer.zip`。模式、强度、输出上限与启用状态持久保存。
+应用首次运行会安装并默认启用 `carbonv.noise-limiter`。它是可卸载的真实插件，使用 `ui,dsp`，不获取网络或文件权限。卸载后不会在下次启动自动重装，可主动「恢复 NoiseLimiter」，也可安装 Release 附带的 `NoiseLimiter-1.1.0.cplayer.zip`。只保留动态强度与输出上限控件，参数及启用状态持久保存。原版旧脚本随应用本地升级，用户改写脚本与卸载状态保留。
 
 详见[音频处理](../noiselimiter.md)。
