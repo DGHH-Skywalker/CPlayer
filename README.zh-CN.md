@@ -8,6 +8,8 @@
 
 在 [GitHub Releases](https://github.com/DGHH-Skywalker/CPlayer/releases/latest) 下载 Windows x64 安装包（setup）或单文件便携版（portable）。每次发布均附源码、构建来源和 `SHA256SUMS.txt`。中国大陆镜像地址列在对应 Release 中；镜像为第三方下载代理，请使用同一版本的校验值核对文件。
 
+当前版本：[Cplayer v1.4.0](docs/releases/v1.4.0.md)，含 Windows x64 安装包、便携版及已完整下载核验的大陆代理链接。
+
 ## 主要功能
 
 - **插件中心 / NoiseLimiter**：设置空白处 3 秒内按 5 次 Enter；默认动态限制，覆盖音乐和 B 站音频，支持 JS/ZIP 插件安装与权限管理

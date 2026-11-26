@@ -8,6 +8,8 @@ Windows-first desktop music requests, school break scheduling and Bilibili MV pl
 
 Use the Windows x64 **setup** installer or single-file **portable** EXE from [GitHub Releases](https://github.com/DGHH-Skywalker/CPlayer/releases/latest). Verify the download with `SHA256SUMS.txt` from the same release. Mainland mirror links are listed in each release; they are third-party download proxies.
 
+Current release: [Cplayer v1.4.0](docs/releases/v1.4.0.md), with verified Windows x64 installer and portable download mirrors.
+
 ## Features
 
 - **插件中心 / NoiseLimiter**：设置空白处 3 秒内按 5 次 Enter；默认动态限制，覆盖音乐和 B 站音频，支持 JS/ZIP 插件安装与权限管理

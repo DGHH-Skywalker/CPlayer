@@ -184,3 +184,5 @@ vendor/bilikit/manifest.json
 新增 API 6 插件中心、五次 Enter 会话入口、JS/ZIP 包、受控文件/设置/浏览器/UI/DSP 接口与 NoiseLimiter；新增共享 Rust/WASM 动态处理和原生双输出集成；重构哔哩Song 定位握手与底栏；补充故障、时序、真实媒体和 Windows 包验收。主要目录为 electron/main/plugins、electron/main/services/audioEffects*、native/noise-dsp、vendor/noiselimiter、src/settings/pluginCenter*、src/services/bilibiliSeek*、src/components/player/BilibiliProgress* 及构建发布脚本。
 
 启动优化进一步将播放准备与路由并行、历史恢复派发先于首页挂载、独立音频配置并行；设置custom和全局工具弹窗真正按需加载；缓存/下载维护与Last.fm/HTTP/MCP分阶段运行，并修复主进程分块后的应用资源路径。详见 [启动与按需加载](startup-loading.md)。
+
+正式 v1.4.0 由 GitHub Actions [45209660238](https://github.com/DGHH-Skywalker/CPlayer/actions/runs/45209660238) 发布，产品提交 `9de6ffd201550ce98fac7c2d7cdb5edef3ccb8e6`。完整检查、8 个发行附件及两个大陆代理 EXE 的摘要核验已完成；实际结果与现场未验证项见 [发布说明](releases/v1.4.0.md) 和 [测试记录](testing.md)。

@@ -217,3 +217,29 @@ Windows 真实 B 站三模式运行 [45149449539](https://github.com/DGHH-Skywal
 最终本地故障集成：105 文件 / 733 项 Web 测试、53 项 Node 测试、7 项可移植/原生适配器 Rust 测试、类型与零警告 Lint 通过。补充CDP attach/register/detach失效的主进程静音门控，不将Core关闭当作保护失败。暂停后挂起浏览器音效上下文，恢复播放再运行，避免后台持续处理静音。Windows候选构建 [45201141348](https://github.com/DGHH-Skywalker/CPlayer/actions/runs/45201141348) 的安装包生成及原生音频回归127项通过、4项忽略；其便携版媒体夹具曾在网页body出现前插入节点，已改为等待实际文档就绪，最终Release仍需完整重跑验收。
 
 正式运行 [45205513900](https://github.com/DGHH-Skywalker/CPlayer/actions/runs/45205513900) 的全部 Windows 检查（包括便携版搜索、Native DSP、五Enter、ZIP安装/恢复、底栏、上课闸门）通过。发布前拦截了Windows宿主重编译WASM与固定资源不一致的问题：改为Linux CI规范重建核验、所有平台校验并分发固定资源，保留严格一致性检查；增加3项资源/源码/换行校验测试。最终源码对应的真实B站三模式 [45208070278](https://github.com/DGHH-Skywalker/CPlayer/actions/runs/45208070278) 也全部通过。
+
+### v1.4.0 最终发布验收（2026-11-23）
+
+正式 Release 已发布：[v1.4.0](https://github.com/DGHH-Skywalker/CPlayer/releases/tag/v1.4.0)，源码 `9de6ffd201550ce98fac7c2d7cdb5edef3ccb8e6`，最终工作流 [45209660238](https://github.com/DGHH-Skywalker/CPlayer/actions/runs/45209660238) 全部成功，发布时间 16:06:31 UTC。
+
+| 验证项                                     | 最终结果                                                                                                                       |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
+| 类型 / ESLint / 文档构建                   | 通过                                                                                                                           |
+| Web / Node                                 | 105 文件 733 项 / 53 项通过                                                                                                    |
+| Rust DSP 与原生适配器                      | 7 项通过                                                                                                                       |
+| 原生音频引擎回归                           | 127 项通过，4 项忽略                                                                                                           |
+| Linux 规范工具链重建固定 WASM              | SHA-256 与发行资源一致                                                                                                         |
+| Electron 主世界注入、Session、音频图与定位 | 通过                                                                                                                           |
+| Windows 100% / 125% / 150% DPI fixture     | 通过                                                                                                                           |
+| 正式 portable EXE                          | preload、懒加载、插件中心、NoiseLimiter、ZIP、搜索失焦、底栏与上课闸门通过                                                     |
+| 真实 B 站三模式                            | [45208070278](https://github.com/DGHH-Skywalker/CPlayer/actions/runs/45208070278) 全通过，增强样本 1920×1080，另两模式 640×360 |
+| 8 个 Release 附件                          | 完整下载，GitHub 摘要及 SHA256SUMS 一致，源码/许可/插件入口/构建来源一致                                                       |
+| 大陆代理两个 EXE                           | gh-proxy.org 完整下载，字节数及 SHA-256 一致                                                                                   |
+
+忽略的 3 项 decoder 测试需本机 FFmpeg 生成前缀 MP4 样本；另 1 项 WASAPI 独占 CPU 负载测试需要实体端点。Windows runner 没有音频输出设备，便携验收明确记录 `nativeAudio.verified=false`；`noiseLimiterState.native=active` 仅说明真实原生模块接受 DSP 配置。
+
+正式 Windows 包页面时钟为 bootstrap 191 ms、player-ready 718 ms、app-mounted 792 ms、startup-complete 871 ms，均为单次 CI 样本，不代表从双击开始的耗时或低配机器性能。CDP 记录确认首次进入首页未解析设置页面、校园控制中心、插件中心、全屏播放器、B 站、音乐库和统计页面，点击后按需载入。
+
+B 站测试结果更新了前文早期“未输出解码帧”的记录：当前匿名样本已通过 1080P 解码及动态限幅、失焦和片尾验收，不推广为所有视频与会员画质保证。实体扬声器截止、真正睡眠/唤醒、真实账号、多显示器及安装/卸载向导人工交互仍未执行，按本页现场步骤复现。
+
+下载文件位于 `dist/release-v1.4.0/`，本地 `mirror-verification.json` 与 `verification-result.json` 留存代理和附件校验。摘要与公开下载地址见 [发布记录](releases/v1.4.0.md)。后续仅提交验收文档，标签保持上述产品源码，不修改已发布附件。
